@@ -1,0 +1,13 @@
+# CMake genereted
+CMakeCache.txt
+CMakeFiles
+Makefile
+*.dir
+*.sln
+*.vcproj
+cmake_install.cmake
+
+# Code product
+*.a
+*.so
+*.o
