@@ -52,12 +52,12 @@ struct McIoWritableControl {
 		if(size == 0 || closeIndicated) return;
 		if(queue.empty()) {
 			int numWritten = ::write(decorated -> fd, buf, size);
-			if(numWritten == 0) return;	// The stream has already closed.
+			if(numWritten == 0) return; // The stream has already closed.
 			else if(numWritten != size) {
 				if(numWritten == -1) {
 					if((errno == EWOULDBLOCK) || (errno == EAGAIN)) 
 						numWritten = 0;
-					else return;		// Error while writing.
+					else return;        // Error while writing.
 				}
 				queue.push_back(castNode(numWritten));
 				try {

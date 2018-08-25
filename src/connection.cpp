@@ -73,16 +73,16 @@ struct McIoConnectionControl {
 			// Perform reading. The code is written in Duff's device style.
 			switch(status) {
 				// Commom code for variant length handling block.
-#define cstPacketLengthBlock(i)\
-				case cstPacketLengthOf(i): {										\
-					char thizByte;													\
-					readStatus = ::read(fd, &thizByte, 1);							\
-					if(readStatus != 1) goto HandleReadStatus;						\
-					else {															\
-						packetSize |= (((int)thizByte) & 0x07f) << (i * 7);			\
-						if((((int)thizByte) & 0x080) == 0) goto EndOfPacketLength;	\
-						else status = cstPacketLengthOf(i + 1);						\
-					}																\
+#define cstPacketLengthBlock(i)                                                     \
+				case cstPacketLengthOf(i): {                                        \
+					char thizByte;                                                  \
+					readStatus = ::read(fd, &thizByte, 1);                          \
+					if(readStatus != 1) goto HandleReadStatus;                      \
+					else {                                                          \
+						packetSize |= (((int)thizByte) & 0x07f) << (i * 7);         \
+						if((((int)thizByte) & 0x080) == 0) goto EndOfPacketLength;  \
+						else status = cstPacketLengthOf(i + 1);                     \
+					}                                                               \
 				};
 
 				// The four Duff's device staus.
@@ -218,7 +218,7 @@ McIoNextStatus McIoConnection::handle(McIoEvent& events) {
 		events, [this](McIoInputStream& inputStream) { handleData(inputStream); });
 	McIoNextStatus writeNext = handleWrite(events);
 	
-	// Generalize by the status.
+	// Generalized by the status. (INVAL indicates impossible combination)
 	// R \ W   More    Final   Poll
 	// More    INVAL   INVAL   More
 	// Final   INVAL   Final   Poll

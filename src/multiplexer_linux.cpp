@@ -105,8 +105,8 @@ struct McIoDescriptorControl {
 	/// Associate the file descriptor with a multiplexer.
 	/// @throw std::runtime_error when the descriptor cannot be registered.
 	void associate(McIoMultiplexer* newMultiplexer, int newEpollfd) {
-		assert(multiplexer == nullptr);							// Not associated.
-		assert(newMultiplexer != nullptr && newEpollfd != -1);	// Valid parameters.
+		assert(multiplexer == nullptr);                         // Not associated.
+		assert(newMultiplexer != nullptr && newEpollfd != -1);  // Valid parameters.
 		
 		// Attempt to add to the list, and perform association.
 		try {
@@ -191,7 +191,7 @@ struct McIoMultiplexerControl {
 	
 	// Update current timeout.
 	void updateTimeout(unsigned long timeout) {
-		assert(timeout > nanosecondLowerBound);	// Timeout should be big enough to avoid disabling timer.
+		assert(timeout > nanosecondLowerBound); // Timeout should be big enough to avoid disabling timer.
 		itimerspec timerSpecification;
 		
 		// Calculate timeout interval.
