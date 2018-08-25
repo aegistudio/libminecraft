@@ -32,6 +32,30 @@ enum McIoEvent {
 	evOut = 1 << 1,
 };
 
+/**
+ * @brief Clear mask in the event flag, no matter that the event flag 
+ * has set or not.
+ */
+inline McIoEvent McIoEventBitClear(McIoEvent value, McIoEvent bit) {
+	return McIoEvent((value | bit) ^ bit);
+}
+
+/**
+ * @brief Indicates the I/O event transition.
+ * @see McIoNextStatus McIoDescriptor::handle(McIoEvent&)
+ */
+enum McIoNextStatus {
+	/// Indicates to add the file descriptor back to the polling queue.
+	nstPoll,
+
+	/// Indicates this is just a yielding from the file descriptor.
+	nstMore,
+	
+	/// Indicates no more I/O will be performed, and will be added to the 
+	/// destruction queue.
+	nstFinal
+};
+
 // For class name reference in descriptor.
 class McIoMultiplexer;
 
@@ -83,7 +107,7 @@ public:
 	 * @param newFlag the I/O flag to update.
 	 */
 	void updateEventFlag(McIoEvent newFlag);
-	
+
 	/// The descriptor control block size.
 	static const size_t descriptorControlBlockSize = 64;
 private:
@@ -97,21 +121,6 @@ private:
 	
 	// The multiplexer needs direct access to the control field.
 	friend class McIoMultiplexer;
-protected:
-	/**
-	 * @brief Enumerates the I/O event transition.
-	 */
-	enum McIoNextStatus {
-		/// Indicates to add the file descriptor back to the polling queue.
-		nstPoll,
-
-		/// Indicates this is just a yielding from the file descriptor.
-		nstMore,
-		
-		/// Indicates no more I/O will be performed, and will be added to the 
-		/// destruction queue.
-		nstFinal
-	};
 	
 	/**
 	 * @brief Handles the I/O event and transit.

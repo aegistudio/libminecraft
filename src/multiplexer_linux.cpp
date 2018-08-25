@@ -1,6 +1,7 @@
 /**
  * @file multiplexer_linux.cpp
  * @brief Implementation for multiplexer.hpp under linux platform.
+ * @author Haoran Luo
  *
  * For interface specification, please refer to the corresponding header. The multiplexing 
  * implementation is based on epoll and timerfd under linux.
@@ -155,7 +156,7 @@ struct McIoMultiplexerControl {
 			// Place the timer descriptor into the epoll queue.
 			controlTimer<EPOLL_CTL_ADD>();
 		}
-		catch(std::exception& ex) {
+		catch(const std::exception& ex) {
 			// Close essential file handlers.
 			if(epollfd != -1) close(epollfd);
 			if(timerfd != -1) close(timerfd);
@@ -306,26 +307,26 @@ void McIoMultiplexer::execute() {
 		for(McIoDescriptorControl* current = controlBlock.activeQueue; current != nullptr;) {
 			// Run the handle() method first.
 			current -> executing = true;
-			McIoDescriptor::McIoNextStatus nextStatus = McIoDescriptor::nstFinal;
+			McIoNextStatus nextStatus = McIoNextStatus::nstFinal;
 			try {
 				assert(current -> descriptor != nullptr && current -> fd != -1);
 				nextStatus = current -> descriptor -> handle(current -> activeEvent);
 			} catch(...) {
-				nextStatus = McIoDescriptor::nstFinal;
+				nextStatus = McIoNextStatus::nstFinal;
 			}
 			current -> executing = false;
-			if(current -> markedRemoval) nextStatus = McIoDescriptor::nstFinal;
+			if(current -> markedRemoval) nextStatus = McIoNextStatus::nstFinal;
 			
 			// Work on the object and see what to do next.
 			McIoDescriptorControl* next = current -> next;
 			switch(nextStatus) {
-				case McIoDescriptor::nstFinal: {
+				case McIoNextStatus::nstFinal: {
 					// Destruct the object.
 					current -> moveQueue(nullptr);
 					controlBlock.erase(current);
 				} break;
 				
-				case McIoDescriptor::nstPoll: {
+				case McIoNextStatus::nstPoll: {
 					// Return the object back to the polling queue.
 					// If it cannot be returned to the polling queue, then remove it.
 					current -> moveQueue(nullptr);
