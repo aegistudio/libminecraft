@@ -55,6 +55,7 @@ private:
 	 * @brief When the packet data is prepared, recast the prepared
 	 * data to the concrete handling method.
 	 *
+	 * @param[in] packetSize the number of bytes in current packet.
 	 * @param[inout] inputStream the input stream wrapping the 
 	 * prepared data.
 	 * @throw std::exception under any circumstance an exception is 
@@ -62,7 +63,7 @@ private:
 	 * no more data to send to a read-closed stream, the socket will
 	 * be removed from the multiplexer.
 	 */
-	virtual void handleData(McIoInputStream& inputStream) = 0;
+	virtual void handle(size_t packetSize, McIoInputStream& inputStream) = 0;
 protected:
 	/**
 	 * @brief Indicate the client to be disconnected, when the data 

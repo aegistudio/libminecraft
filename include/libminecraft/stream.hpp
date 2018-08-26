@@ -35,9 +35,9 @@ public:
 };
 
 /// @brief Abstraction for the output stream.
-class McIoOuputStream {
+class McIoOutputStream {
 public:
-	virtual ~McIoOuputStream() {}
+	virtual ~McIoOutputStream() {}
 	
 	/**
 	 * @brief the very interface for sending data to stream.
@@ -46,5 +46,5 @@ public:
 	 * data from buffer to buffer + receiveLength - 1 will be sent.
 	 * @param[in] sendLength the length of the data to send.
 	 */
-	virtual void send(const char* buffer, size_t sendLength) = 0;
+	virtual void write(const char* buffer, size_t sendLength) = 0;
 };

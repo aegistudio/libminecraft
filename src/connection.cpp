@@ -138,7 +138,7 @@ struct McIoConnectionControl {
 					if(readSize == packetSize) {
 						// Construct the stream and call the handle method.
 						McIoBufferInputStream stream(targetBuffer, packetSize);
-						handleData(stream);
+						handleData(packetSize, stream);
 						
 						// Reset fields and transit back to packet length.
 						readSize = 0;
@@ -215,7 +215,8 @@ void McIoConnection::indicateDisconnect() noexcept {
 McIoNextStatus McIoConnection::handle(McIoEvent& events) {
 	// Attempt to perform I/O first.
 	McIoNextStatus readNext = ((McIoConnectionControl*)control) -> handleRead(
-		events, [this](McIoInputStream& inputStream) { handleData(inputStream); });
+		events, [this](size_t packetSize, McIoInputStream& inputStream) 
+				{ handle(packetSize, inputStream); });
 	McIoNextStatus writeNext = handleWrite(events);
 	
 	// Generalized by the status. (INVAL indicates impossible combination)
