@@ -11,17 +11,18 @@
  * always in big endian (network endian), as it is defined so 
  * in java.
  *
+ * The variant integer and variant long operation are supported,
+ * the maximum length for a variant integer is always 5, while 
+ * it is always 9 for a variant long.
+ *
  * The string in libminecraft should always be std::u16string,
  * and it will be translated from / to std::u8string during
  * receiving / transmitting, as minecraft always uses java's
  * String representation, which is utf-16 oriented.
- *
- * The variant integer and variant long operation are supported,
- * the maximum length for a variant integer is always 5, while 
- * it is always 9 for a variant long.
  */
 #include "libminecraft/stream.hpp"
 #include <cstdint>
+#include <string>
 
 /// Data type template placeholder, indicating the underlying 
 /// type should be a fixed length one, usually big endian.
@@ -98,3 +99,15 @@ typedef McDtDataType<int64_t,  McDtFlavourFixed>   s64;
 /// Unsigned 64-bit big-endian integer.
 typedef McDtDataType<uint64_t, McDtFlavourFixed>   u64;
 };	// End of namespace mc.
+
+/**
+ * @brief Read utf-8 string from the stream (whose byte length is known) and 
+ * convert it to utf-16. 
+ * It is prepared for strings whose length is confined as template.
+ * @param[in] inputStream the input stream instance.
+ * @param[in] byteLength the length of byte in the string.
+ * @param[out] resultString the converted string.
+ * @return the pointer to input stream.
+ */
+McIoInputStream& McIoReadUtf16String(McIoInputStream& inputStream, 
+		size_t byteLength, std::u16string& resultString);

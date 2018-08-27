@@ -9,6 +9,7 @@
 #include "libminecraft/iobase.hpp"
 #include <netinet/in.h>
 #include <stdexcept>
+#include <vector>
 
 #ifdef _MSC_VER
 // The microsoft has already implemented ntohll() and htonll().
@@ -206,4 +207,115 @@ mc::var64::write(McIoOutputStream& outputStream) const {
 template<> McIoInputStream& 
 mc::var64::read(McIoInputStream& inputStream) {
 	return in<int64_t, 10, 1>(inputStream, *this);
+}
+
+inline bool McIoIsNotFollowerByte(char c) {
+	return (c & 0xc0) != 0x80;
+}
+
+// The exception message for malformed string.
+static const char* malformedString = "Malformed utf-8 string.";
+
+// The utf-8 to utf-16 input converter.
+template<typename Appender>
+inline McIoInputStream& in(McIoInputStream& inputStream, 
+		Appender& appender, size_t byteLength) {
+			
+	size_t i;
+	for(i = 0; i < byteLength;) {
+		int v = 0x080808080; 			// Filled with placeholder values.
+		unsigned char* c = reinterpret_cast<unsigned char*>(&v);
+		inputStream.read((char*)c, 1);	// Acquire leading byte.
+		++ i;
+		
+		// Judge how to acquire and handle followed bytes.
+		size_t followed = 0; 	// The number of bytes followed.
+		int mask = 0;			// The mask applied to leading value.
+		int offset = 0;			// The right-shifting offset.
+		
+		if(c[0] < 0x080) {
+			followed = 0;
+			mask = 0x7f;
+			offset = 18;
+		}
+		else if(c[0] >= 0x0c0 && c[0] < 0x0e0) {
+			followed = 1;
+			mask = 0x1f;
+			offset = 12;
+		}
+		else if(c[0] >= 0x0e0 && c[0] < 0x0f0) {
+			followed = 2;
+			mask = 0x0f;
+			offset = 6;
+		}
+		else if(c[0] >= 0x0f0 && c[0] < 0x0f8) {
+			followed = 3;
+			mask = 0x07;
+			offset = 0;
+		}
+		else throw std::runtime_error(malformedString);
+		
+		// Convert it to a single character.
+		if(followed > 0) {
+			inputStream.read((char*)&c[1], followed);
+			i += followed;
+		}
+		if(	McIoIsNotFollowerByte(c[1]) || 
+			McIoIsNotFollowerByte(c[2]) || 
+			McIoIsNotFollowerByte(c[3]))
+			throw std::runtime_error(malformedString);
+		int characterValue =   (((c[0] & mask) << 18) |
+		                        ((c[1] & 0x3f) << 12) |
+		                        ((c[2] & 0x3f) <<  6) |
+		                        ((c[3] & 0x3f) <<  0)) >> offset;
+								
+		// Convert character value to utf-16 string.
+		if(characterValue < 0x010000) 
+			appender.append((char16_t)characterValue);
+		else {
+			// Convert to surrogate pair.
+			characterValue -= 0x010000;
+			int highSurrogate = (characterValue >> 10) & 0x03ff;
+			int lowSurrogate  = (characterValue >> 0)  & 0x03ff;
+			appender.append((char16_t)(0xD800 | highSurrogate));
+			appender.append((char16_t)(0xDC00 | lowSurrogate));
+		}
+	}
+	if(i != byteLength) throw std::runtime_error(malformedString);
+	return inputStream;
+}
+
+// Implementation for the read utf18 string (length known) method.
+McIoInputStream& McIoReadUtf16String(McIoInputStream& inputStream, 
+		size_t byteLength, std::u16string& resultString) {
+	struct McIoVectorAppender {
+		// Stores code points in the string.
+		std::vector<char16_t> stringBuilder;
+		
+		// Constructor for the builder, byteLength / 2 elements should be reserved.
+		// when all characters are 1-byte utf-8, the size will be byteLength.
+		// When all characters are 2-byte utf-8, the size will be byteLength / 2.
+		// when all characters are 3-byte utf-8, the size will be byteLength / 3.
+		// When all characters are 4-byte utf-8, the size will be byteLength.
+		McIoVectorAppender(size_t byteLength): stringBuilder() {
+			stringBuilder.reserve(byteLength / 2);
+		}
+		
+		// Append new code point to the string.
+		void append(char16_t codePoint) {
+			stringBuilder.push_back(codePoint);
+		}
+		
+		// Retrieve the new string.
+		std::u16string toString() {
+			return std::u16string(stringBuilder.data(), stringBuilder.size());
+		}
+	};
+	
+	// Perform conversion.
+	McIoVectorAppender appender(byteLength);
+	McIoInputStream& resultStream = in<McIoVectorAppender>
+				(inputStream, appender, byteLength);
+	resultString = appender.toString();
+	return resultStream;
 }
