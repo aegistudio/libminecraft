@@ -16,7 +16,7 @@ endif()
 include_directories(include ${ZLIB_INCLUDE_DIR})
 
 # Configure the library targets.
-set(LIBMC_SRC src/connection.cpp src/writable.cpp src/stream.cpp)
+set(LIBMC_SRC src/connection.cpp src/writable.cpp src/stream.cpp src/iobase.cpp)
 if(UNIX AND NOT APPLE)
 list(APPEND LIBMC_SRC src/multiplexer_linux.cpp)
 endif()

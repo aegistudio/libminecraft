@@ -4,7 +4,7 @@
  * @author Haoran Luo
  *
  * For interface specification, please refer to the corresponding header.
- * @see connection.hpp
+ * @see libminecraft/connection.hpp
  */
 #include "libminecraft/connection.hpp"
 #include "libminecraft/bufstream.hpp"
@@ -219,15 +219,16 @@ McIoNextStatus McIoConnection::handle(McIoEvent& events) {
 				{ handle(packetSize, inputStream); });
 	McIoNextStatus writeNext = handleWrite(events);
 	
-	// Generalized by the status. (INVAL indicates impossible combination)
-	// R \ W   More    Final   Poll
-	// More    INVAL   INVAL   More
-	// Final   INVAL   Final   Poll
-	// Poll    INVAL   Final   Poll
+	// If next state of writeNext would be McIoNextStatus::nstFinal, the 
+	// connection will be closed as there's no need to process on.
+	// R \ W   Final   Poll
+	// Poll    Final   Poll
+	// Final   Final   Poll
+	// More    Final   More
 	assert(writeNext != McIoNextStatus::nstMore);
-	if(readNext == nstMore) {
-		assert(writeNext != McIoNextStatus::nstFinal);
+	if(writeNext == McIoNextStatus::nstFinal)
+		return McIoNextStatus::nstFinal;
+	else if(readNext == McIoNextStatus::nstMore)
 		return McIoNextStatus::nstMore;
-	}
-	else return writeNext;
+	else return McIoNextStatus::nstPoll;
 }

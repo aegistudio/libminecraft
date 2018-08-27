@@ -4,7 +4,7 @@
  * @author Haoran Luo
  *
  * For interface specification, please refer to the corresponding header.
- * @see writable.hpp
+ * @see libminecraft/writable.hpp
  */
 #include "libminecraft/writable.hpp"
 #include <list>

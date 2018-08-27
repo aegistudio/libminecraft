@@ -4,7 +4,7 @@
  * @author Haoran Luo
  *
  * For interface specification, please refer to the corresponding header.
- * @see bufstream.hpp
+ * @see libminecraft/bufstream.hpp
  */
 #include "libminecraft/stream.hpp"
 #include "libminecraft/bufstream.hpp"
