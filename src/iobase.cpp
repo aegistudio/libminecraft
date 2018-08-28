@@ -220,7 +220,7 @@ static const char* malformedString = "Malformed utf-8 string.";
 template<typename Appender>
 inline McIoInputStream& in(McIoInputStream& inputStream, 
 		Appender& appender, size_t byteLength) {
-			
+
 	size_t i;
 	for(i = 0; i < byteLength;) {
 		int v = 0x080808080; 			// Filled with placeholder values.
@@ -285,7 +285,7 @@ inline McIoInputStream& in(McIoInputStream& inputStream,
 	return inputStream;
 }
 
-// Implementation for the read utf18 string (length known) method.
+// Implementation for the read utf-16 string (length known) method.
 McIoInputStream& McIoReadUtf16String(McIoInputStream& inputStream, 
 		size_t byteLength, std::u16string& resultString) {
 	struct McIoVectorAppender {
@@ -301,9 +301,9 @@ McIoInputStream& McIoReadUtf16String(McIoInputStream& inputStream,
 			stringBuilder.reserve(byteLength / 2);
 		}
 		
-		// Append new code point to the string.
-		void append(char16_t codePoint) {
-			stringBuilder.push_back(codePoint);
+		// Append new code unit to the string.
+		void append(char16_t codeUnit) {
+			stringBuilder.push_back(codeUnit);
 		}
 		
 		// Retrieve the new string.

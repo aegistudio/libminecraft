@@ -23,6 +23,7 @@
 #include "libminecraft/stream.hpp"
 #include <cstdint>
 #include <string>
+#include <stdexcept>
 
 /// Data type template placeholder, indicating the underlying 
 /// type should be a fixed length one, usually big endian.
@@ -31,6 +32,12 @@ class McDtFlavourFixed;
 /// Data type template placeholder, indicating the underlying
 /// type should be variant length.
 class McDtFlavourVariant;
+
+/// Data type template placeholder, indicating the underlying
+/// type should be a length prefixed string, with a predefined max length.
+/// The length is in the unit of code unit.
+template<size_t maxLength>
+class McDtFlavourString;
 
 /**
  * @brief Data type template used in generic deduction, the compiler
@@ -76,6 +83,40 @@ operator<<(McIoOutputStream& inputStream, const McDtDataType<T, McDtFlavour>& da
 	return data.write(inputStream);
 }
 
+/**
+ * @brief Read utf-8 string from the stream (whose byte length is known) and 
+ * convert it to utf-16. 
+ * It is prepared for strings whose length is confined as template.
+ * @param[in] inputStream the input stream instance.
+ * @param[in] byteLength the length of byte in the string.
+ * @param[out] resultString the converted string.
+ * @param[out] codeUnitLength the number of code units.
+ * @return the pointer to input stream.
+ */
+McIoInputStream& McIoReadUtf16String(McIoInputStream& inputStream, 
+		size_t byteLength, std::u16string& resultString);
+
+/**
+ * Template partial specialization for std::u16string as internal data,
+ * which is the storage form of mc::ustring.
+ *
+ * Documents are omitted, see the most general McDtDataType for interface
+ * description.
+ */
+template<size_t maxLength>
+class McDtDataType<std::u16string, McDtFlavourString<maxLength> > {
+private:
+	std::u16string data;
+public:
+	McDtDataType(): data() {}
+	McDtDataType(std::u16string data): data(data) {}
+	inline operator std::u16string&() { return data; }
+	inline operator const std::u16string&() const { return data; }
+	inline McDtDataType& operator=(const McDtDataType& a) { data = a.data; }
+	McIoInputStream& read(McIoInputStream& inputStream);
+	McIoOutputStream& write(McIoOutputStream& outputStream) const;
+};
+	
 /// Use namespace 'mc' to indicate that these types are minecraft related data.
 namespace mc {
 /// Variant integer of 32-bit long.
@@ -98,16 +139,30 @@ typedef McDtDataType<uint32_t, McDtFlavourFixed>   u32;
 typedef McDtDataType<int64_t,  McDtFlavourFixed>   s64;
 /// Unsigned 64-bit big-endian integer.
 typedef McDtDataType<uint64_t, McDtFlavourFixed>   u64;
-};	// End of namespace mc.
 
 /**
- * @brief Read utf-8 string from the stream (whose byte length is known) and 
- * convert it to utf-16. 
- * It is prepared for strings whose length is confined as template.
- * @param[in] inputStream the input stream instance.
- * @param[in] byteLength the length of byte in the string.
- * @param[out] resultString the converted string.
- * @return the pointer to input stream.
+ * The unicode (utf-16 while processing, utf-8 while transmitting) string.
+ * It is usually built in with a boundary check, the string won't be parsed
+ * if it fails to pass the check.
+ *
+ * The length 32767 is the currently max allowed length transmitted in 
+ * minecraft protocol, however setting 0 could completely disable this 
+ * length check.
  */
-McIoInputStream& McIoReadUtf16String(McIoInputStream& inputStream, 
-		size_t byteLength, std::u16string& resultString);
+template<size_t maxLength = 32767>
+using ustring = McDtDataType<std::u16string, McDtFlavourString<maxLength> >;
+};	// End of namespace mc.
+
+/// The implementation of reading mc::ustring with max length constrain.
+template<size_t maxLength> inline McIoInputStream& 
+mc::ustring<maxLength>::read(McIoInputStream& inputStream) {
+	mc::var32 byteLength;	// The string length in byte.
+	McIoInputStream& aInputStream = byteLength.read(inputStream);
+	if(byteLength < 0) throw std::runtime_error("The string has negative length.");
+	else if(maxLength > 0 && byteLength > (maxLength * 4)) 
+		throw std::runtime_error("The string is too long.");
+	McIoInputStream& bInputStream = McIoReadUtf16String(
+		aInputStream, (size_t)byteLength, data);
+	if(data.length() > maxLength) throw std::runtime_error("The string is too long.");
+	return bInputStream;
+}
