@@ -7,9 +7,12 @@
  * @see libminecraft/iobase.hpp
  */
 #include "libminecraft/iobase.hpp"
+#include "libminecraft/bufstream.hpp"
 #include <netinet/in.h>
 #include <stdexcept>
 #include <vector>
+#include <locale>
+#include <codecvt>
 
 #ifdef _MSC_VER
 // The microsoft has already implemented ntohll() and htonll().
@@ -285,7 +288,7 @@ inline McIoInputStream& in(McIoInputStream& inputStream,
 	return inputStream;
 }
 
-// Implementation for the read utf-16 string (length known) method.
+// Implementation for the read utf-16 string (length known) function.
 McIoInputStream& McIoReadUtf16String(McIoInputStream& inputStream, 
 		size_t byteLength, std::u16string& resultString) {
 	struct McIoVectorAppender {
@@ -318,4 +321,95 @@ McIoInputStream& McIoReadUtf16String(McIoInputStream& inputStream,
 				(inputStream, appender, byteLength);
 	resultString = appender.toString();
 	return resultStream;
+}
+
+// The utf-16 to utf-8 output converter.
+template<typename Appender>
+void out(Appender& appender, const std::u16string& outputString) {
+	const mc::var32 length = outputString.length();
+	
+	// Convert the string into utf-8 on writing out.
+	for(size_t i = 0; i < length;) {
+		// Retrieve character values first.
+		int charValue = 0;
+		char16_t highBits = (outputString[i] & 0xFC00);
+		
+		// Judge whether it is a high surrogate.
+		if(highBits >= 0xD800 && highBits < 0xE000) {
+			// The followed byte must be a low surrogate.
+			if(i + 1 >= length || (outputString[i + 1] & 0xFC00) != 0xDC00)
+				throw std::string("The utf-16 string is malformed");
+			
+			// Convert the surrogate pairs back to basic string.
+			charValue = (((outputString[i] & 0x03FF) << 10)| 
+						 ((outputString[i] & 0x03FF)  << 0)) + 0x10000;
+			i += 2;
+		}
+		else {
+			charValue = (outputString[i] & 0x0FFFF);
+			++ i;
+		}
+		
+		// Prepare the string for utf-8 conversion.
+		size_t numBytes = 4;
+		int mask = 0xF0;
+		
+		if(charValue < 0x080) {
+			numBytes = 1;
+			charValue <<= 18;
+			mask = 0;
+		}
+		else if(charValue >= 0x080 && charValue < 0x0800) {
+			numBytes = 2;
+			charValue <<= 12;
+			mask = 0xC0;
+		}
+		else if(charValue >= 0x0800 && charValue < 0x010000) {
+			numBytes = 3;
+			charValue <<= 6;
+			mask = 0xE0;
+		}
+		
+		// Convert and write out data.
+		char c[4];
+		c[0] = ((charValue >> 18) & 0x7F) | mask;
+		c[1] = ((charValue >> 12) & 0x3F) | 0x80;
+		c[2] = ((charValue >>  6) & 0x3F) | 0x80;
+		c[3] = ((charValue >>  0) & 0x3F) | 0x80;
+		appender.append(c, numBytes);
+	}
+}
+
+// Implementation for the write utf-16 string function.
+McIoOutputStream& McIoWriteUtf16String(McIoOutputStream& outputStream,
+		const std::u16string& outputString) {
+	
+	// Define the output appender.
+	struct McIoStreamAppender {
+		McIoBufferOutputStream bufferStream;
+		
+		void append(const char* c, size_t numBytes) {
+			bufferStream.write(c, numBytes);
+		}
+	};
+	
+	// Convert the utf-16 string.
+	McIoStreamAppender appender;
+	out<McIoStreamAppender>(appender, outputString);
+	
+	// Pipe the converted data to output stream.
+	const char* buffer; size_t size;
+	std::tie(size, buffer) = appender.bufferStream.lengthPrefixedData();
+	outputStream.write(buffer, size);
+	return outputStream;
+}
+
+// Implementations for utf-16 with locale imbued string conversion.
+typedef std::wstring_convert<std::codecvt_utf8<char16_t>, char16_t> McIoUtf16StringConverter;
+std::u16string McIoLocaleStringToUtf16(const std::string& localeImbuedString) {
+	return McIoUtf16StringConverter().from_bytes(localeImbuedString);
+}
+
+std::string McIoUtf16StringLocale(const std::u16string& utf16String) {
+	return McIoUtf16StringConverter().to_bytes(utf16String);
 }

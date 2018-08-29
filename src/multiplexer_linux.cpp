@@ -258,10 +258,11 @@ void McIoMultiplexer::execute() {
 	while(epollRunning) {
 		int numEvents = epoll_wait(controlBlock.epollfd, eventEpoll, numEventEpoll,
 				(controlBlock.activeQueue != nullptr)? 0 : -1);
-		if(numEvents < 0) throw std::runtime_error("Error while polling events.");
+		// Except the case of returning -1 due to handled signal must we throw exception.
+		if(numEvents < 0 && errno != EINTR) throw std::runtime_error("Error while polling events.");
 		
 		// Interpret each events.
-		for(size_t i = 0; i < numEvents; ++ i) {
+		if(numEvents > 0) for(size_t i = 0; i < numEvents; ++ i) {
 			if(eventEpoll[i].data.ptr != nullptr) {
 				// The file descriptor is a normal file descriptor.
 				McIoDescriptorControl* descriptorControl = 

@@ -49,14 +49,10 @@ private:
 	/// The data storaged in the cell.
 	T data;
 public:
-	/// The empty constructor.
+	// The constructors for the type.
 	McDtDataType(): data() {}
-	
-	/// The assignment constructor.
-	McDtDataType(T data): data(data) {}
-	
-	/// The type casting operator, to extract the internal data.
-	inline operator T&() { return data; }
+	McDtDataType(const T& data): data(data) {}
+	McDtDataType(T&& data): data(data) {}
 	
 	/// The const type casting operator, to extract the internal data.
 	inline operator const T&() const { return data; }
@@ -86,7 +82,7 @@ operator<<(McIoOutputStream& inputStream, const McDtDataType<T, McDtFlavour>& da
 /**
  * @brief Read utf-8 string from the stream (whose byte length is known) and 
  * convert it to utf-16. 
- * It is prepared for strings whose length is confined as template.
+ * It is for mc::ustring to call as it is template.
  * @param[in] inputStream the input stream instance.
  * @param[in] byteLength the length of byte in the string.
  * @param[out] resultString the converted string.
@@ -97,6 +93,29 @@ McIoInputStream& McIoReadUtf16String(McIoInputStream& inputStream,
 		size_t byteLength, std::u16string& resultString);
 
 /**
+ * @brief Write utf-16 string to the stream as utf-8 with length prefixed.
+ * It is for mc::ustring to call as it is template.
+ * @param[in] outputStream the output stream instance.
+ * @param[in] outputString the string to output.
+ */
+McIoOutputStream& McIoWriteUtf16String(McIoOutputStream& outputStream,
+		const std::u16string& outputString);
+		
+/**
+ * @brief Convert from a string with locale imbued to an utf-16 string.
+ * @param[in] localeImbuedString the string with application locale.
+ * @return the utf-16 string converted.
+ */
+std::u16string McIoLocaleStringToUtf16(const std::string& localeImbuedString);
+
+/**
+ * @brief Convert from a utf-16 string into string with locale imbued.
+ * @param[in] utf16String the string with utf-16 encoding.
+ * @return the locale imbued string.
+ */
+std::string McIoUtf16StringLocale(const std::u16string& utf16String);
+	
+/**
  * Template partial specialization for std::u16string as internal data,
  * which is the storage form of mc::ustring.
  *
@@ -105,16 +124,35 @@ McIoInputStream& McIoReadUtf16String(McIoInputStream& inputStream,
  */
 template<size_t maxLength>
 class McDtDataType<std::u16string, McDtFlavourString<maxLength> > {
-private:
 	std::u16string data;
+	
+	// Performing length integrity checking.
+	inline void ensureLengthConstrain() const {
+		if(maxLength != 0 && data.length() > maxLength) throw std::runtime_error(
+			std::string("The string is too long (must be shorter than ") 
+				+ std::to_string(maxLength) + " code units).");
+	}
 public:
 	McDtDataType(): data() {}
-	McDtDataType(std::u16string data): data(data) {}
-	inline operator std::u16string&() { return data; }
+	McDtDataType(const std::u16string& data): data(data) 
+		{	ensureLengthConstrain();	}
+	McDtDataType(std::u16string&& data): data(data) 
+		{	ensureLengthConstrain();	}
+	
 	inline operator const std::u16string&() const { return data; }
 	inline McDtDataType& operator=(const McDtDataType& a) { data = a.data; }
 	McIoInputStream& read(McIoInputStream& inputStream);
-	McIoOutputStream& write(McIoOutputStream& outputStream) const;
+	McIoOutputStream& write(McIoOutputStream& outputStream) const {
+		return McIoWriteUtf16String(outputStream, data);
+	}
+	
+	// Special constructors and toString() like only for this specialization.
+	// Notice that the string passed in is localized (depending on application
+	// locale settings).
+	McDtDataType(const std::string& localeImbuedString): 
+		data(McIoLocaleStringToUtf16(localeImbuedString))
+		{	ensureLengthConstrain();	}
+	std::string str() const { return McIoUtf16StringLocale(data); }
 };
 	
 /// Use namespace 'mc' to indicate that these types are minecraft related data.
@@ -163,6 +201,6 @@ mc::ustring<maxLength>::read(McIoInputStream& inputStream) {
 		throw std::runtime_error("The string is too long.");
 	McIoInputStream& bInputStream = McIoReadUtf16String(
 		aInputStream, (size_t)byteLength, data);
-	if(data.length() > maxLength) throw std::runtime_error("The string is too long.");
+	ensureLengthConstrain();
 	return bInputStream;
 }
