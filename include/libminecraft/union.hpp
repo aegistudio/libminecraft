@@ -242,7 +242,7 @@ public:
 			static_cast<const McDtUnion&>(*this).asType<V>());
 	}
 	
-	/// Copy assign an object to the object stored in the union.
+	/// Assigning an immutable object to the object stored in the union.
 	/// If the stored object is not of the assigend object's type, it 
 	/// will be converted to the assigned object's type first.
 	template<typename V>
@@ -251,16 +251,11 @@ public:
 		return *this;
 	}
 	
-	/// Copy assign an object to the object stored in the union.
-	template<typename V>
-	McDtUnion& operator=(V& copyValue) {
-		return operator=(static_cast<const V&>(copyValue));
-	}
-
-	/// Move assign an object to the object stored in the union.
+	/// Assigning a mutable object to the object stored in the union.
 	template<typename V>
 	McDtUnion& operator=(V&& moveValue) {
-		convertType<V>() = std::move(moveValue);
+		convertType<typename std::remove_reference<V>::type>() 
+				= std::forward<V>(moveValue);
 		return *this;
 	}
 	
