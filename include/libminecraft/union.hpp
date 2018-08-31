@@ -356,7 +356,8 @@ public:
 	/// If the stored object is not of the assigend object's type, it 
 	/// will be converted to the assigned object's type first.
 	template<typename V>
-	McDtUnion& operator=(const V& copyValue) {
+	typename std::enable_if<!std::is_same<std::nullptr_t, V>::value, McDtUnion&>::type
+	operator=(const V& copyValue) {
 		char* copiedBuffer = (char*)(const_cast<V*>(&copyValue));
 		if(!valueValid) {
 			info.template byOrdinal<McDtUnionAction::copyConstruct>(
@@ -379,13 +380,15 @@ public:
 	
 	/// Assigning a mutable l-value object to the object stored in the union.
 	template<typename V>
-	McDtUnion& operator=(V& copiedValue) {
+	typename std::enable_if<!std::is_same<std::nullptr_t, V>::value, McDtUnion&>::type
+	operator=(V& copiedValue) {
 		return *this = (const_cast<const V&>(copiedValue));
 	}
 	
 	/// Assigning a mutable r-value object to the object stored in the union.
 	template<typename V>
-	McDtUnion& operator=(V&& movedValue) {
+	typename std::enable_if<!std::is_same<std::nullptr_t, V>::value, McDtUnion&>::type
+	operator=(V&& movedValue) {
 		char* movedBuffer = (char*)(const_cast<V*>(&movedValue));
 		if(!valueValid) {
 			info.template byOrdinal<McDtUnionAction::moveConstruct>(
@@ -403,6 +406,15 @@ public:
 			info.template byOrdinal<McDtUnionAction::moveAssign>(type, 
 				valueValid, (char*)value, movedBuffer);
 		}
+		return *this;
+	}
+	
+	// Perform destruction when assigning nullptr to the union.
+	template<typename V>
+	typename std::enable_if<std::is_same<std::nullptr_t, V>::value, McDtUnion&>::type
+	operator=(V&& movedValue) {
+		info.template byOrdinal<McDtUnionAction::destruct>(
+				type, valueValid, (char*)value);
 		return *this;
 	}
 	

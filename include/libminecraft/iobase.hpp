@@ -56,10 +56,14 @@ public:
 	
 	/// The const type casting operator, to extract the internal data.
 	inline operator const T&() const { return data; }
-	
-	// The assignments from a data to this wrapper.
-	inline McDtDataType& operator=(const McDtDataType& a) 
-			{ data = a.data; return *this; }
+		
+	// Allow assignment between data type of different flavours.
+	template<typename U>
+	inline McDtDataType& operator=(const McDtDataType<T, U>& a) 
+			{	data = (const T&)a; return *this; }
+	template<typename U>
+	inline McDtDataType& operator=(McDtDataType<T, U>&& a) 
+			{	data = (T&&)a; return *this; }
 	
 	/// The input method that reads data from the input stream.
 	McIoInputStream& read(McIoInputStream&);
