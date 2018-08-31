@@ -34,8 +34,7 @@ template <size_t baseOrdinal, typename... T>
 class McDtUnionInfo;
 
 /**
- * @brief The final block storing the union information, should be 
- * inherited by other typed-union informationn blocks.
+ * @brief The final block storing the union information.
  *
  * The final block specifies failure or termination conditions for 
  * template's specialization deduction.
@@ -57,6 +56,9 @@ public:
 	inline static void deleteByOrdinal(int32_t ordinal, char* buffer) noexcept {
 		// Do nothing, no throw here.
 	}
+	
+	/// @return the max size of specified union types.
+	inline static constexpr size_t maxSize() {	return 0;	}
 };
 
 /**
@@ -64,24 +66,10 @@ public:
  * for the head type in the typed list.
  */
 template <size_t baseOrdinal, typename T0, typename... T>
-class McDtUnionInfo<baseOrdinal, T0, T...> : 
-	// Conjuncted with tailing information blocks.
-	public McDtUnionInfo<baseOrdinal + 1, T...> {
-	
-	// Max value of ordinal to find the last block in the union information.
-	static constexpr size_t maxOrdinal = baseOrdinal + 1 + (sizeof...(T));
-	
-	/// The constructor function for head type.
-	static void newInstanceMethod(char* buffer) 
-		{	new (buffer) T0();	}
-	
-	/// The destructor for the head type.
-	static void deleteInstanceMethod(char* buffer) noexcept
-		{	((T0*)buffer) -> ~T0();	}
-public:	
-	/// Current information block constructor.
-	constexpr McDtUnionInfo(): McDtUnionInfo<baseOrdinal + 1, T...>() {}
-	
+class McDtUnionInfo<baseOrdinal, T0, T...> {
+	// The next node of union information block.
+	typedef McDtUnionInfo<baseOrdinal + 1, T...> next;
+public:
 	/// Construct an instance to the specified buffer by ordinal.
 	/// @brief ordinal The ordinal of the object to create.
 	/// @brief buffer The buffer to create object onto.
@@ -89,7 +77,7 @@ public:
 		if(ordinal <  baseOrdinal) 
 			throw std::runtime_error("Union ordinal value exceeds boundary");
 		else if(ordinal == baseOrdinal) new (buffer) T0();
-		else McDtUnionInfo<baseOrdinal + 1, T...>::newByOrdinal(ordinal, buffer);
+		else next::newByOrdinal(ordinal, buffer);
 	}
 	
 	/// Destroy an instance with prior known ordinal.
@@ -100,7 +88,7 @@ public:
 		else if(ordinal == baseOrdinal) try {
 			((T0*)buffer) -> ~T0();
 		} catch(const std::exception&) { /* Digest exceptions. */ }
-		else McDtUnionInfo<baseOrdinal + 1, T...>::deleteByOrdinal(ordinal, buffer);
+		else next::deleteByOrdinal(ordinal, buffer);
 	}
 	
 	// Helper functions to be used as info.ordinalOf<U>().
@@ -114,25 +102,13 @@ public:
 	// due to failure of matching specialization.
 	template<typename U> static constexpr 
 	typename std::enable_if<!std::is_same<T0, U>::value, size_t>::type
-	ordinalOf() {	return McDtUnionInfo<baseOrdinal + 1, T...>::template ordinalOf<U>();	}
-};
-
-/// Used to determine max memory usage of the provided typed list.
-template<typename... T>
-struct McDtUnionMaxSize;
-
-/// End of the max memory usage block.
-template<>
-struct McDtUnionMaxSize<> {
-	static constexpr size_t value = 0;
-};
-
-/// Generate the next memory usage block based on head type and list tail.
-template<typename T0, typename... T>
-struct McDtUnionMaxSize<T0, T...> {
-	static constexpr size_t value = 
-		sizeof(T0) > McDtUnionMaxSize<T...>::value?
-		sizeof(T0) : McDtUnionMaxSize<T...>::value;
+	ordinalOf() {	return next::template ordinalOf<U>();	}
+	
+	/// @return the max size of specified union types.
+	inline static constexpr size_t maxSize() {	
+		return 	sizeof(T0) > next::maxSize()? 
+				sizeof(T0) : next::maxSize();
+	}
 };
 
 /**
@@ -144,8 +120,12 @@ struct McDtUnionMaxSize<T0, T...> {
  * The object associated with the ordinal (type) is managed by the union,
  * and will be destroyed when the union object get destroyed.
  */
-template<size_t maxSize, class UnionInfo>
+template<class UnionInfo>
 class McDtUnion {
+public:
+	///  The union information block for this typed union.
+	static constexpr UnionInfo info = UnionInfo();
+private:
 	/// Which type is currently stored in the typed-union.
 	size_t type;
 	
@@ -153,10 +133,8 @@ class McDtUnion {
 	bool valueValid;
 	
 	/// Holding the object specified as one of the union type candidate.
-	int64_t value[(maxSize + sizeof(int64_t) - 1) / sizeof(int64_t)];
+	int64_t value[(info.maxSize() + sizeof(int64_t) - 1) / sizeof(int64_t)];
 public:
-	///  The union information block for this typed union.
-	static constexpr UnionInfo info = UnionInfo();
 	
 	/// Constructor for the typed union object.
 	McDtUnion(): type(0), valueValid(false) {
@@ -265,5 +243,5 @@ namespace mc {
 	
 	/// The mc::cunion type indicating this is the typed-union object.
 	template<typename... T>
-	using cunion = McDtUnion<McDtUnionMaxSize<T...>::value, cuinfo<T...> >;
+	using cunion = McDtUnion<cuinfo<T...> >;
 }; // End of namespace mc.
