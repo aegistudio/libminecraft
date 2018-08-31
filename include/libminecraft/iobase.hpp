@@ -58,7 +58,8 @@ public:
 	inline operator const T&() const { return data; }
 	
 	// The assignments from a data to this wrapper.
-	inline McDtDataType& operator=(const McDtDataType& a) { data = a.data; }
+	inline McDtDataType& operator=(const McDtDataType& a) 
+			{ data = a.data; return *this; }
 	
 	/// The input method that reads data from the input stream.
 	McIoInputStream& read(McIoInputStream&);
@@ -140,7 +141,10 @@ public:
 		{	ensureLengthConstrain();	}
 	
 	inline operator const std::u16string&() const { return data; }
-	inline McDtDataType& operator=(const McDtDataType& a) { data = a.data; }
+	inline McDtDataType& operator=(const McDtDataType& a) 
+			{ data = a.data;  return *this; }
+	inline McDtDataType& operator=(McDtDataType&& a) 
+			{ data = std::forward<McDtDataType>(a.data);  return *this; }
 	McIoInputStream& read(McIoInputStream& inputStream);
 	McIoOutputStream& write(McIoOutputStream& outputStream) const {
 		return McIoWriteUtf16String(outputStream, data);

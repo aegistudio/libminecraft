@@ -25,6 +25,7 @@
 
 #include <cstddef>
 #include <stdexcept>
+#include <cassert>
  
 /**
  * @brief The typed union info reflecting ordinal information and memory
@@ -34,6 +35,140 @@ template <size_t baseOrdinal, typename... T>
 class McDtUnionInfo;
 
 /**
+ * The union actions specifies what union information block can do with the 
+ * buffer provided by the typed union.
+ *
+ * All action should provide a perform(bool&, char*, char*) method with generic 
+ * type, to keep track of the action.
+ */
+namespace McDtUnionAction {
+	// Invoke the default constructor (the destination buffer will be omitted).
+	struct defaultConstruct {
+		// Any type to perform construct must possess a default constructor.
+		template<typename U> static inline 
+		typename std::enable_if<std::is_default_constructible<U>::value>::type
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer = nullptr) {
+			assert(!valueValid);
+			new (dstBuffer) U();
+			valueValid = true;
+		}
+	};
+	
+	// Invoke the destructor (the destination buffer will be omitted).
+	struct destruct {
+		// Any type must be destructible, there's no exception.
+		template<typename U> static inline void 
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer = nullptr) {
+			assert(valueValid);
+			((U*)dstBuffer) -> ~U();	
+			valueValid = false;
+		}
+	};
+	
+	// Invoke the copy constructor.
+	struct copyConstruct {
+		// When the object is copy constructible, just perform copy construction.
+		template<typename U> static inline 
+		typename std::enable_if<std::is_copy_constructible<U>::value>::type
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) {
+			assert(!valueValid);
+			const U& copiedObject = *reinterpret_cast<const U*>(srcBuffer);
+			new (dstBuffer) U(copiedObject);
+			valueValid = true;
+		}
+		
+		// When the object is not copy constructible but copy assignable, perform 
+		// copy assignment instead.
+		template<typename U> static inline 
+		typename std::enable_if<	!std::is_copy_constructible<U>::value && 
+									std::is_copy_assignable<U>::value	>::type
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) {	
+			assert(!valueValid);
+			const U& copiedObject = *reinterpret_cast<const U*>(srcBuffer);
+			defaultConstruct::template perform<U>(valueValid, dstBuffer);
+			if(valueValid) *((U*)dstBuffer) = copiedObject;
+		}
+	};
+	
+	// Invoke the move constructor.
+	struct moveConstruct {
+		// When the object is move constructible, just perform move construction.
+		template<typename U> static inline
+		typename std::enable_if<std::is_move_constructible<U>::value>::type
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) {
+			assert(!valueValid);
+			U& movedObject = *reinterpret_cast<U*>(srcBuffer);
+			new (dstBuffer) U(std::move(movedObject));
+			valueValid = true;
+		}
+		
+		// When the object is not move constructible but move assignable, perform 
+		// move assignment instead.
+		template<typename U> static inline 
+		typename std::enable_if<	!std::is_move_constructible<U>::value && 
+									std::is_move_assignable<U>::value	>::type
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) {
+			assert(!valueValid);
+			U& movedObject = *reinterpret_cast<U*>(srcBuffer);
+			defaultConstruct::template perform<U>(valueValid, dstBuffer);
+			if(valueValid) *((U*)dstBuffer) = std::move(movedObject);
+		}
+	};
+	
+	// Invoke the copy assign. Can only be invoked when the source objeet presents, and 
+	// source buffer and destination buffer's object are of same type.
+	struct copyAssign {
+		// When the object is copy constructible, just perform copy construction.
+		template<typename U> static inline 
+		typename std::enable_if<std::is_copy_assignable<U>::value>::type
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) {	
+			assert(valueValid);
+			const U& copiedObject = *reinterpret_cast<const U*>(srcBuffer);
+			*((U*)dstBuffer) = copiedObject;
+		}
+		
+		// When the object is not copy assignable but copy constructible, perform 
+		// copy construction instead.
+		template<typename U> static inline 
+		typename std::enable_if<	!std::is_copy_assignable<U>::value && 
+									std::is_copy_constructible<U>::value>::type
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) {	
+			assert(valueValid);
+			const U& copiedObject = *reinterpret_cast<const U*>(srcBuffer);
+			destruct::template perform<U>(valueValid, dstBuffer);
+			if(!valueValid) copyConstruct::template perform<U>(
+					valueValid, dstBuffer, srcBuffer);
+		}
+	};
+	
+	// Invoke the copy assign, Can only be invoked when the source objeet presents, and 
+	// source buffer and destination buffer's object are of same type.
+	struct moveAssign {
+		// When the object is move constructible, just perform move construction.
+		template<typename U> static inline 
+		typename std::enable_if<std::is_move_assignable<U>::value>::type
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) {
+			assert(valueValid);
+			U& movedObject = *reinterpret_cast<U*>(srcBuffer);
+			*((U*)dstBuffer) = std::move(movedObject);
+		}
+		
+		// When the object is not move assignable but move constructible, perform 
+		// move construction instead.
+		template<typename U> static inline 
+		typename std::enable_if<	!std::is_move_assignable<U>::value && 
+									std::is_copy_constructible<U>::value>::type
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) {	
+			assert(valueValid);
+			U& copiedObject = *reinterpret_cast<U*>(srcBuffer);
+			destruct::template perform<U>(valueValid, dstBuffer);
+			if(!valueValid) moveConstruct::template perform<U>(
+				valueValid, dstBuffer, srcBuffer);
+		}
+	};
+};
+ 
+/**
  * @brief The final block storing the union information.
  *
  * The final block specifies failure or termination conditions for 
@@ -42,19 +177,15 @@ class McDtUnionInfo;
 template <size_t maxOrdinal>
 class McDtUnionInfo<maxOrdinal> {
 public:
-	/// Construct an instance to the specified buffer by ordinal.
+	/// Perform an action associated to the ordinal with the object.
 	/// @brief ordinal The ordinal of the object to create.
-	/// @brief buffer The buffer to create object onto.
-	inline static void newByOrdinal(int32_t ordinal, char* buffer) {
+	/// @brief dstBuffer The buffer of the object to update.
+	/// @brief srcBuffer The buffer to the object serving as parameter.
+	template<typename Action>
+	inline static void byOrdinal(int32_t ordinal, bool& valueValid,
+			char* dstBuffer, char* srcBuffer) {				
 		// Ordinal must be greater than or equal the max ordinal this case.
 		throw std::runtime_error("Union ordinal value exceeds boundary.");
-	}
-	
-	/// Destroy an instance with prior known ordinal.
-	/// @brief ordinal of ordinal of the object to destroy.
-	/// @brief buffer The buffer to destroy object from.
-	inline static void deleteByOrdinal(int32_t ordinal, char* buffer) noexcept {
-		// Do nothing, no throw here.
 	}
 	
 	/// @return the max size of specified union types.
@@ -67,30 +198,33 @@ public:
  */
 template <size_t baseOrdinal, typename T0, typename... T>
 class McDtUnionInfo<baseOrdinal, T0, T...> {
+	// Make sure that the T0 has a default constructor, being
+	// default constructible and move constructible.
+	static_assert(	std::is_copy_constructible<T0>::value || 
+					std::is_copy_assignable<T0>::value, 
+			"The specified type must be copy-constructible!");
+	
+	static_assert(	std::is_move_constructible<T0>::value ||
+					std::is_move_assignable<T0>::value, 
+			"The specified type must be move-constructible!");
+	
+	// Make sure that nullptr is not specified as parameter.
+	static_assert(!std::is_same<std::nullptr_t, T0>::value,
+			"The nullptr is reserved for special use in union.");
+	
 	// The next node of union information block.
 	typedef McDtUnionInfo<baseOrdinal + 1, T...> next;
 public:
-	/// Construct an instance to the specified buffer by ordinal.
-	/// @brief ordinal The ordinal of the object to create.
-	/// @brief buffer The buffer to create object onto.
-	inline static void newByOrdinal(int32_t ordinal, char* buffer) {
+	template<typename Action>
+	inline static void byOrdinal(int32_t ordinal, bool& valueValid,
+				char* dstBuffer, char* srcBuffer = nullptr) {
 		if(ordinal < baseOrdinal) 
 			throw std::runtime_error("Union ordinal value exceeds boundary");
-		else if(ordinal == baseOrdinal) new (buffer) T0();
-		else next::newByOrdinal(ordinal, buffer);
+		else if(ordinal == baseOrdinal)
+			Action::template perform<T0>(valueValid, dstBuffer, srcBuffer);
+		else next::template byOrdinal<Action>(ordinal, valueValid, dstBuffer, srcBuffer);
 	}
-	
-	/// Destroy an instance with prior known ordinal.
-	/// @brief ordinal of ordinal of the object to destroy.
-	/// @brief buffer The buffer to destroy object from.
-	inline static void deleteByOrdinal(int32_t ordinal, char* buffer) noexcept {
-		if(ordinal < baseOrdinal) return;
-		else if(ordinal == baseOrdinal) try {
-			((T0*)buffer) -> ~T0();
-		} catch(const std::exception&) { /* Digest exceptions. */ }
-		else next::deleteByOrdinal(ordinal, buffer);
-	}
-	
+
 	// Helper functions to be used as info.ordinalOf<U>().
 	// The specified type is current union information block's type, so just return current
 	// ordinal as result.
@@ -141,9 +275,24 @@ public:
 		// Don't automatically initialize object.
 	}
 	
+	/// Copy constructor for the typed union object.
+	McDtUnion(const McDtUnion& a): type(a.type), valueValid(false) {
+		info.template byOrdinal<McDtUnionAction::copyConstruct>
+				(type, valueValid, (char*)value, (char*)a.value);
+	}
+	
+	/// Move constructor for the typed union object.
+	McDtUnion(McDtUnion&& a): type(a.type), valueValid(false) {
+		info.template byOrdinal<McDtUnionAction::moveConstruct>
+				(type, valueValid, (char*)value, (char*)a.value);
+	}
+	
 	/// Destructor for the typed union object.
 	~McDtUnion() noexcept {
-		if(valueValid) info.deleteByOrdinal(type, (char*)value);
+		if(valueValid) try {
+			info.template byOrdinal<McDtUnionAction::destruct>
+				(type, valueValid, (char*)value);
+		} catch(const std::exception& ex) { /* Digest exception */ }
 	}
 	
 	/// Update the union to make it store the object of provided ordinal.
@@ -154,14 +303,14 @@ public:
 		
 		// Destroy the previous object first.
 		if(valueValid && typeOrdinal != type) {
-			valueValid = false;
-			info.deleteByOrdinal(type, (char*)value);
+			info.template byOrdinal<McDtUnionAction::destruct>
+				(type, valueValid, (char*)value);
 		}
 		
 		// Create a new object them.
 		type = typeOrdinal;
-		info.newByOrdinal(type, (char*)value);
-		valueValid = true;
+		info.template byOrdinal<McDtUnionAction::defaultConstruct>
+				(type, valueValid, (char*)value);
 	}
 	
 	/// Update the union to make it store the object of provided type.
@@ -208,15 +357,52 @@ public:
 	/// will be converted to the assigned object's type first.
 	template<typename V>
 	McDtUnion& operator=(const V& copyValue) {
-		convertType<V>() = copyValue;
+		char* copiedBuffer = (char*)(const_cast<V*>(&copyValue));
+		if(!valueValid) {
+			info.template byOrdinal<McDtUnionAction::copyConstruct>(
+				(int32_t)(type = info.template ordinalOf<V>()), 
+				valueValid, (char*)value, copiedBuffer);
+		}
+		else if(valueValid && type != info.template ordinalOf<V>()) {
+			info.template byOrdinal<McDtUnionAction::destruct>(
+				type, valueValid, (char*)value);
+			info.template byOrdinal<McDtUnionAction::copyConstruct>(
+				(int32_t)(type = info.template ordinalOf<V>()), 
+				valueValid, (char*)value, copiedBuffer);
+		}
+		else {
+			info.template byOrdinal<McDtUnionAction::copyAssign>(type, 
+				valueValid, (char*)value, copiedBuffer);
+		}
 		return *this;
 	}
 	
-	/// Assigning a mutable object to the object stored in the union.
+	/// Assigning a mutable l-value object to the object stored in the union.
 	template<typename V>
-	McDtUnion& operator=(V&& moveValue) {
-		convertType<typename std::remove_reference<V>::type>() 
-				= std::forward<V>(moveValue);
+	McDtUnion& operator=(V& copiedValue) {
+		return *this = (const_cast<const V&>(copiedValue));
+	}
+	
+	/// Assigning a mutable r-value object to the object stored in the union.
+	template<typename V>
+	McDtUnion& operator=(V&& movedValue) {
+		char* movedBuffer = (char*)(const_cast<V*>(&movedValue));
+		if(!valueValid) {
+			info.template byOrdinal<McDtUnionAction::moveConstruct>(
+				(int32_t)(type = info.template ordinalOf<V>()),
+				valueValid, (char*)value, movedBuffer);
+		}
+		else if(valueValid && type != info.template ordinalOf<V>()) {
+			info.template byOrdinal<McDtUnionAction::destruct>(
+				type, valueValid, (char*)value);
+			info.template byOrdinal<McDtUnionAction::moveConstruct>(
+				(int32_t)(type = info.template ordinalOf<V>()), 
+				valueValid, (char*)value, movedBuffer);
+		}
+		else {
+			info.template byOrdinal<McDtUnionAction::moveAssign>(type, 
+				valueValid, (char*)value, movedBuffer);
+		}
 		return *this;
 	}
 	
