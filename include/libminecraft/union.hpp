@@ -74,7 +74,7 @@ public:
 	/// @brief ordinal The ordinal of the object to create.
 	/// @brief buffer The buffer to create object onto.
 	inline static void newByOrdinal(int32_t ordinal, char* buffer) {
-		if(ordinal <  baseOrdinal) 
+		if(ordinal < baseOrdinal) 
 			throw std::runtime_error("Union ordinal value exceeds boundary");
 		else if(ordinal == baseOrdinal) new (buffer) T0();
 		else next::newByOrdinal(ordinal, buffer);
@@ -138,8 +138,7 @@ public:
 	
 	/// Constructor for the typed union object.
 	McDtUnion(): type(0), valueValid(false) {
-		info.newByOrdinal(type, (char*)value);
-		valueValid = true;
+		// Don't automatically initialize object.
 	}
 	
 	/// Destructor for the typed union object.
