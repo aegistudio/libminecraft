@@ -20,7 +20,7 @@
  *
  * The typed union info (mc::cuinfo) stores reflection information about the 
  * provided types. (Like retrieving an ordinal of a type, via info.ordinalOf<T>()).
- * The user could retrieve info via mc::cunion<>::info() (or cuobj.info()).
+ * The user could retrieve info via mc::cunion<>::info (or cuobj.info).
  */
 
 #include <cstddef>
@@ -34,56 +34,28 @@ template <size_t baseOrdinal, typename... T>
 class McDtUnionInfo;
 
 /**
- * @brief The ordinal view of a typed union information. Type-casting
- * to this class would yield ordinal information.
- */
-template <typename T>
-struct McDtUnionOrdinal {
-	/// The ordinal of the specified type.
-	const size_t ordinal;
-
-	// Constructor of the ordinal view.
-	McDtUnionOrdinal(size_t ordinal): ordinal(ordinal) {}
-};
-
-/**
  * @brief The final block storing the union information, should be 
  * inherited by other typed-union informationn blocks.
+ *
+ * The final block specifies failure or termination conditions for 
+ * template's specialization deduction.
  */
 template <size_t maxOrdinal>
 class McDtUnionInfo<maxOrdinal> {
-protected:
-	/// The abstract constructor for a typed union specified type.
-	typedef void (*newInstance)(char* buffer);
-	
-	/// The abstract destructor for a typed union specified type.
-	typedef void (*deleteInstance)(char* buffer);
-	
-	/// Stores the constructor information. Other typed-union
-	/// information block should inhert register its typed 
-	/// constructor here.
-	newInstance constructors[maxOrdinal];
-	
-	/// Stores the desctructor information. Used just like the 
-	/// constructor counterpart.
-	deleteInstance destructors[maxOrdinal];
 public:
 	/// Construct an instance to the specified buffer by ordinal.
 	/// @brief ordinal The ordinal of the object to create.
 	/// @brief buffer The buffer to create object onto.
-	void newByOrdinal(int32_t ordinal, char* buffer) const {
-		if(ordinal < 0 || ordinal >= maxOrdinal)
-			throw std::runtime_error("Union ordinal value exceeds boundary.");
-		constructors[ordinal](buffer);
+	inline static void newByOrdinal(int32_t ordinal, char* buffer) {
+		// Ordinal must be greater than or equal the max ordinal this case.
+		throw std::runtime_error("Union ordinal value exceeds boundary.");
 	}
 	
 	/// Destroy an instance with prior known ordinal.
 	/// @brief ordinal of ordinal of the object to destroy.
 	/// @brief buffer The buffer to destroy object from.
-	void deleteByOrdinal(int32_t ordinal, char* buffer) const noexcept {
-		if(ordinal >= 0 && ordinal < maxOrdinal) try {
-			destructors[ordinal](buffer);
-		} catch(const std::exception&) { /* Digest exceptions. */ }
+	inline static void deleteByOrdinal(int32_t ordinal, char* buffer) noexcept {
+		// Do nothing, no throw here.
 	}
 };
 
@@ -94,9 +66,8 @@ public:
 template <size_t baseOrdinal, typename T0, typename... T>
 class McDtUnionInfo<baseOrdinal, T0, T...> : 
 	// Conjuncted with tailing information blocks.
-	public McDtUnionInfo<baseOrdinal + 1, T...>,
-	// Providing ordinal view of the fhead type.
-	public McDtUnionOrdinal<T0> {					
+	public McDtUnionInfo<baseOrdinal + 1, T...> {
+	
 	// Max value of ordinal to find the last block in the union information.
 	static constexpr size_t maxOrdinal = baseOrdinal + 1 + (sizeof...(T));
 	
@@ -109,26 +80,42 @@ class McDtUnionInfo<baseOrdinal, T0, T...> :
 		{	((T0*)buffer) -> ~T0();	}
 public:	
 	/// Current information block constructor.
-	McDtUnionInfo(): McDtUnionInfo<baseOrdinal + 1, T...>(),
-			McDtUnionOrdinal<T0>(baseOrdinal) {
-		
-		// Register constructor and destructor of the head type.
-		McDtUnionInfo<maxOrdinal>::constructors[baseOrdinal] = 
-			McDtUnionInfo<baseOrdinal, T0, T...>::newInstanceMethod;
-		McDtUnionInfo<maxOrdinal>::destructors[baseOrdinal] = 
-			McDtUnionInfo<baseOrdinal, T0, T...>::deleteInstanceMethod;
+	constexpr McDtUnionInfo(): McDtUnionInfo<baseOrdinal + 1, T...>() {}
+	
+	/// Construct an instance to the specified buffer by ordinal.
+	/// @brief ordinal The ordinal of the object to create.
+	/// @brief buffer The buffer to create object onto.
+	inline static void newByOrdinal(int32_t ordinal, char* buffer) {
+		if(ordinal <  baseOrdinal) 
+			throw std::runtime_error("Union ordinal value exceeds boundary");
+		else if(ordinal == baseOrdinal) new (buffer) T0();
+		else McDtUnionInfo<baseOrdinal + 1, T...>::newByOrdinal(ordinal, buffer);
 	}
 	
-	/// Helper function to be used as info.ordinalOf<U>().
-	template<typename U> size_t ordinalOf() const noexcept;
+	/// Destroy an instance with prior known ordinal.
+	/// @brief ordinal of ordinal of the object to destroy.
+	/// @brief buffer The buffer to destroy object from.
+	inline static void deleteByOrdinal(int32_t ordinal, char* buffer) noexcept {
+		if(ordinal < baseOrdinal) return;
+		else if(ordinal == baseOrdinal) try {
+			((T0*)buffer) -> ~T0();
+		} catch(const std::exception&) { /* Digest exceptions. */ }
+		else McDtUnionInfo<baseOrdinal + 1, T...>::deleteByOrdinal(ordinal, buffer);
+	}
+	
+	// Helper functions to be used as info.ordinalOf<U>().
+	// The specified type is current union information block's type, so just return current
+	// ordinal as result.
+	template<typename U> static constexpr 
+	typename std::enable_if< std::is_same<T0, U>::value, size_t>::type
+	ordinalOf() {	return baseOrdinal;	}
+	
+	// If the specified type is not the in the typed union's list, the code won't compile
+	// due to failure of matching specialization.
+	template<typename U> static constexpr 
+	typename std::enable_if<!std::is_same<T0, U>::value, size_t>::type
+	ordinalOf() {	return McDtUnionInfo<baseOrdinal + 1, T...>::template ordinalOf<U>();	}
 };
-
-// The body of the ordinalOf<U>() helper function.
-template<size_t baseOrdinal, typename T0, typename... T> 
-template<typename U> 
-size_t McDtUnionInfo<baseOrdinal, T0, T...>::ordinalOf() const noexcept {
-	return McDtUnionOrdinal<U>::ordinal;
-}
 
 /// Used to determine max memory usage of the provided typed list.
 template<typename... T>
@@ -168,21 +155,18 @@ class McDtUnion {
 	/// Holding the object specified as one of the union type candidate.
 	int64_t value[(maxSize + sizeof(int64_t) - 1) / sizeof(int64_t)];
 public:
-	/// Retrieve the decoupled typed-union information.
-	static const UnionInfo& info() noexcept {
-		static const UnionInfo uinfo;
-		return uinfo;
-	}
+	///  The union information block for this typed union.
+	static constexpr UnionInfo info = UnionInfo();
 	
 	/// Constructor for the typed union object.
 	McDtUnion(): type(0), valueValid(false) {
-		info().newByOrdinal(type, (char*)value);
+		info.newByOrdinal(type, (char*)value);
 		valueValid = true;
 	}
 	
 	/// Destructor for the typed union object.
 	~McDtUnion() noexcept {
-		if(valueValid) info().deleteByOrdinal(type, (char*)value);
+		if(valueValid) info.deleteByOrdinal(type, (char*)value);
 	}
 	
 	/// Update the union to make it store the object of provided ordinal.
@@ -194,12 +178,12 @@ public:
 		// Destroy the previous object first.
 		if(valueValid && typeOrdinal != type) {
 			valueValid = false;
-			info().deleteByOrdinal(type, (char*)value);
+			info.deleteByOrdinal(type, (char*)value);
 		}
 		
 		// Create a new object them.
 		type = typeOrdinal;
-		info().newByOrdinal(type, (char*)value);
+		info.newByOrdinal(type, (char*)value);
 		valueValid = true;
 	}
 	
@@ -209,7 +193,7 @@ public:
 	/// @return the converted object of given type.
 	template<typename V>
 	V& convertType() {
-		convertOrdinal(info().McDtUnionOrdinal<V>::ordinal);
+		convertOrdinal(info.template ordinalOf<V>());
 		return *reinterpret_cast<V*>(&value);
 	}
 	
@@ -218,7 +202,7 @@ public:
 	/// no exception is thrown if it is not of specified type.
 	template<typename V>
 	bool isType() const noexcept {
-		size_t typeOrdinal = info().McDtUnionOrdinal<V>::ordinal;
+		size_t typeOrdinal = info.template ordinalOf<V>();
 		if(!valueValid || typeOrdinal != type) return false;
 		else return true;
 	}
