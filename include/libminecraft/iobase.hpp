@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <string>
 #include <stdexcept>
+#include <vector>
 
 /// Data type template placeholder, indicating the underlying 
 /// type should be a fixed length one, usually big endian.
@@ -43,6 +44,11 @@ class McDtFlavourString;
 /// type should be a java length prefixed string. See mc::jstring.
 class McDtFlavourJavaString;
 
+/// Data type template placeholder, indicating the underlying 
+/// type should be a variant length prefixed array.
+template<typename lengthType>
+class McDtFlavourArray;
+
 /**
  * @brief Data type template used in generic deduction, the compiler
  * should find the right function to call.
@@ -53,6 +59,12 @@ private:
 	/// The data storaged in the cell.
 	T data;
 public:
+	// Helper for retrieving the internal type.
+	typedef T type;
+	
+	// Helper for retrieving the internal flavour.
+	typedef McDtFlavour flavour;
+
 	// The constructors for the type.
 	McDtDataType(): data() {}
 	McDtDataType(const T& data): data(data) {}
@@ -143,6 +155,9 @@ class McDtDataType<std::u16string, McDtFlavourString<maxLength> > {
 				+ std::to_string(maxLength) + " code units).");
 	}
 public:
+	typedef std::u16string type;
+	typedef McDtFlavourString<maxLength> flavour;
+
 	McDtDataType(): data() {}
 	McDtDataType(const std::u16string& data): data(data) 
 		{	ensureLengthConstrain();	}
@@ -205,6 +220,81 @@ public:
 		data(McIoLocaleStringToUtf16(localeImbuedString))
 		{	ensureLengthConstrain();	}
 };
+
+/**
+ * Template partial specialization for std::vector<V> as internal data, and L
+ * as prefixed length. which is the storage form of mc::array<V, L>.
+ *
+ * Documents are omitted, see the most general McDtDataType for interface
+ * description.
+ */
+template<typename V, typename L>
+class McDtDataType<std::vector<V>, McDtFlavourArray<L>> {
+	std::vector<V> data;
+public:
+	// The helper type definitions.
+	typedef std::vector<V> type;
+	typedef V componentType;
+	typedef McDtFlavourArray<L> flavour;
+	typedef typename L::type lengthType;
+	static_assert(std::is_integral<lengthType>::value, 
+			"The array's length type must be an integer.");
+
+	// The specialization functions.
+	McDtDataType(): data() {}
+	McDtDataType(const std::vector<V>& data): data(data) {}
+	McDtDataType(std::vector<V>&& data): data(std::move(data)) {}
+	inline operator const std::vector<V>&() const { return data; }
+	inline operator std::vector<V>&&() { return std::move(data); }
+	template<typename U>
+	inline McDtDataType& operator=(const McDtDataType<std::vector<V>, U>& a) 
+			{	data = (const std::vector<V>&)a; return *this; }
+	template<typename U>
+	inline McDtDataType& operator=(McDtDataType<std::vector<V>, U>&& a) 
+			{	data = (std::vector<V>&&)a; return *this; }
+	
+	// The array operator.
+	inline V& operator[](size_t idx) { return data[idx]; }
+	inline const V& operator[](size_t idx) const { return data[idx]; }
+	
+	/// The input method that reads data from the input stream.
+	McIoInputStream& read(McIoInputStream& inputStream) {
+		// Read the variant length first.
+		L readArrayLength;
+		readArrayLength.read(inputStream);
+		lengthType lengthValue = (lengthType)readArrayLength;
+		if(lengthValue < 0) throw std::runtime_error(
+			"The array length has negative length.");
+		
+		// Read the elements inside the array.
+		size_t length =	(size_t)lengthValue;
+		std::vector<V> readData(0);
+		readData.reserve(length);
+		for(size_t i = 0; i < length; ++ i) {
+			V value;
+			value.read(inputStream);
+			readData.push_back(std::move(value));
+		}
+		
+		// Swap with the internal data.
+		using std::swap;
+		swap(data, readData);
+	}
+	
+	/// The output method that writes data to the output stream.
+	McIoOutputStream& write(McIoOutputStream& outputStream) const {
+		// Write the variant length first.
+		lengthType lengthValue = data.size();
+		if(lengthValue < 0) throw std::runtime_error(
+			"The array is too large to be represented in the length type.");
+		L writeArrayLength = lengthValue;
+		writeArrayLength.write(outputStream);
+		
+		// Write the elements inside the array.
+		for(auto iter = data.begin(); iter != data.end(); ++ iter) 
+			iter -> write(outputStream);
+	}
+};
 	
 /// Use namespace 'mc' to indicate that these types are minecraft related data.
 namespace mc {
@@ -260,6 +350,15 @@ template<typename F>
 inline std::string str(const McDtDataType<std::u16string, F>& data) { 
 	return McIoUtf16StringLocale((const std::u16string&)data);
 }
+
+/**
+ * The array used in minecraft, with a value type and a length type. Both value 
+ * type and length type should be protocol version independent while calling
+ * read and write method.
+ */
+template<typename V, typename L>
+using array = McDtDataType<std::vector<V>, McDtFlavourArray<L> >;
+
 };	// End of namespace mc.
 
 /// The implementation of reading mc::ustring with max length constrain.
