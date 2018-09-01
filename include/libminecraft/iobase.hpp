@@ -39,6 +39,10 @@ class McDtFlavourVariant;
 template<size_t maxLength>
 class McDtFlavourString;
 
+/// Data type template placeholder, indicating the underlying
+/// type should be a java length prefixed string. See mc::jstring.
+class McDtFlavourJavaString;
+
 /**
  * @brief Data type template used in generic deduction, the compiler
  * should find the right function to call.
@@ -148,18 +152,21 @@ public:
 	inline operator const std::u16string&() const { return data; }
 	inline operator std::u16string&&() const { return std::move(data); }
 	
-	template<typename F>
-	inline McDtDataType& operator=(const McDtDataType<std::u16string, F>& a) { 
-		if(std::is_same<McDtFlavourString<maxLength>, F>::value) {
-			// No check required to perform, directly copy assign.
-			data = a.data; 
-		}
-		else {
-			// Check copied value before copy assigning.
-			using std::swap;
-			McDtDataType checkingObject(std::move((std::u16string&&)a));
-			swap(data, checkingObject.data);
-		}
+	template<typename F> inline typename 
+	std::enable_if<std::is_same<McDtFlavourString<maxLength>, F>::value, McDtDataType&>::type
+	operator=(const McDtDataType<std::u16string, F>& a) { 
+		// No check required to perform, directly copy assign.
+		data = a.data; 
+		return *this; 
+	}
+	
+	template<typename F> inline typename 
+	std::enable_if<!std::is_same<McDtFlavourString<maxLength>, F>::value, McDtDataType&>::type
+	operator=(const McDtDataType<std::u16string, F>& a) { 
+		// Check copied value before copy assigning.
+		using std::swap;
+		McDtDataType checkingObject((const std::u16string&)a);
+		swap(data, checkingObject.data);
 		return *this; 
 	}
 	
@@ -168,18 +175,21 @@ public:
 		return operator=(const_cast<const McDtDataType<std::u16string, F>&>(a));
 	}
 	
-	template<typename F>
-	inline McDtDataType& operator=(McDtDataType<std::u16string, F>&& a) {
-		if(std::is_same<McDtFlavourString<maxLength>, F>::value) {
-			// No check required to perform, directly move assign.
-			data = std::move(a.data); 
-		}
-		else {
-			// Check copied value before move assigning.
-			using std::swap;
-			McDtDataType checkingObject(std::move((std::u16string&&)a));
-			swap(data, checkingObject.data);
-		}
+	template<typename F> inline typename 
+	std::enable_if<std::is_same<McDtFlavourString<maxLength>, F>::value, McDtDataType&>::type
+	operator=(McDtDataType<std::u16string, F>&& a) { 
+		// No check required to perform, directly move assign.
+		data = std::move(a.data); 
+		return *this;
+	}
+	
+	template<typename F> inline typename 
+	std::enable_if<!std::is_same<McDtFlavourString<maxLength>, F>::value, McDtDataType&>::type
+	operator=(McDtDataType<std::u16string, F>&& a) { 
+		// Check copied value before copy assigning.
+		using std::swap;
+		McDtDataType checkingObject(std::move((std::u16string&&)a));
+		swap(data, checkingObject.data);
 		return *this; 
 	}
 	
@@ -194,7 +204,6 @@ public:
 	McDtDataType(const std::string& localeImbuedString): 
 		data(McIoLocaleStringToUtf16(localeImbuedString))
 		{	ensureLengthConstrain();	}
-	std::string str() const { return McIoUtf16StringLocale(data); }
 };
 	
 /// Use namespace 'mc' to indicate that these types are minecraft related data.
@@ -231,6 +240,22 @@ typedef McDtDataType<uint64_t, McDtFlavourFixed>   u64;
  */
 template<size_t maxLength = 32767>
 using ustring = McDtDataType<std::u16string, McDtFlavourString<maxLength> >;
+
+/**
+ * The unicode string prefixed with java's big endian unsigned short integer 
+ * (thus called mc::jstring). The maximum length of the string is up to 65535.
+ */
+typedef McDtDataType<std::u16string, McDtFlavourJavaString> jstring;
+
+/**
+ * @brief Convert all std::u16string type to std::string, imbuing locale.
+ * @param[in] data The data type instance holding the utf-16 string.
+ * @return the string with imbued locale.
+ */
+template<typename F>
+inline std::string str(const McDtDataType<std::u16string, F>& data) { 
+	return McIoUtf16StringLocale((const std::u16string&)data);
+}
 };	// End of namespace mc.
 
 /// The implementation of reading mc::ustring with max length constrain.
