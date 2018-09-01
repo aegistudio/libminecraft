@@ -13,6 +13,7 @@
 #include <vector>
 #include <locale>
 #include <codecvt>
+#include <climits>
 
 #ifdef _MSC_VER
 // The microsoft has already implemented ntohll() and htonll().
@@ -381,12 +382,15 @@ void out(Appender& appender, const std::u16string& outputString) {
 }
 
 // Implementation for the write utf-16 string function.
-McIoOutputStream& McIoWriteUtf16String(McIoOutputStream& outputStream,
+inline void McIoWriteUtf16StringBuffer(McIoBufferOutputStream& stream,
 		const std::u16string& outputString) {
 	
 	// Define the output appender.
 	struct McIoStreamAppender {
-		McIoBufferOutputStream bufferStream;
+		McIoBufferOutputStream& bufferStream;
+		
+		McIoStreamAppender(McIoBufferOutputStream& bufferStream):
+				bufferStream(bufferStream) {}
 		
 		void append(const char* c, size_t numBytes) {
 			bufferStream.write(c, numBytes);
@@ -394,12 +398,20 @@ McIoOutputStream& McIoWriteUtf16String(McIoOutputStream& outputStream,
 	};
 	
 	// Convert the utf-16 string.
-	McIoStreamAppender appender;
+	McIoStreamAppender appender(stream);
 	out<McIoStreamAppender>(appender, outputString);
+}
+
+McIoOutputStream& McIoWriteUtf16String(McIoOutputStream& outputStream,
+		const std::u16string& outputString) {
+	
+	// Convert string to utf-8 format.
+	McIoBufferOutputStream outputBuffer;
+	McIoWriteUtf16StringBuffer(outputBuffer, outputString);
 	
 	// Pipe the converted data to output stream.
 	const char* buffer; size_t size;
-	std::tie(size, buffer) = appender.bufferStream.lengthPrefixedData();
+	std::tie(size, buffer) = outputBuffer.lengthPrefixedData();
 	outputStream.write(buffer, size);
 	return outputStream;
 }
@@ -412,4 +424,30 @@ std::u16string McIoLocaleStringToUtf16(const std::string& localeImbuedString) {
 
 std::string McIoUtf16StringLocale(const std::u16string& utf16String) {
 	return McIoUtf16StringConverter().to_bytes(utf16String);
+}
+
+// Implementation for mc::jstring's I/O methods.
+template<> McIoInputStream&
+mc::jstring::read(McIoInputStream& inputStream) {
+	mc::u16 utfLength;
+	McIoInputStream& aInputStream = utfLength.read(inputStream);
+	return McIoReadUtf16String(inputStream, (size_t)utfLength, data);
+}
+
+template<> McIoOutputStream&
+mc::jstring::write(McIoOutputStream& outputStream) const {
+	// Convert string to utf-8 format.
+	McIoBufferOutputStream outputBuffer;
+	McIoWriteUtf16StringBuffer(outputBuffer, data);
+	
+	// Pipe the converted data to output stream.
+	const char* buffer; size_t size;
+	std::tie(size, buffer) = outputBuffer.rawData();
+	if(size > USHRT_MAX) throw std::runtime_error(
+			"The length is too long for java string output.");
+	
+	mc::u16 utfLength = size;
+	McIoOutputStream& aOutputStream = outputStream << utfLength;
+	aOutputStream.write(buffer, size);
+	return aOutputStream;
 }
