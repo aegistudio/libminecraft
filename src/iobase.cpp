@@ -451,3 +451,25 @@ mc::jstring::write(McIoOutputStream& outputStream) const {
 	aOutputStream.write(buffer, size);
 	return aOutputStream;
 }
+
+// Instantiation of mc::f32's I/O methods.
+template<> McIoOutputStream& 
+mc::f32::write(McIoOutputStream& outputStream) const {
+	return out<float, concreteconv<float, uint32_t, htonl> >(outputStream, *this);
+}
+
+template<> McIoInputStream&
+mc::f32::read(McIoInputStream& inputStream) {
+	return in<float, concreteconv<float, uint32_t, htonl> >(inputStream, *this);
+}
+
+// Instantiation of mc::f64's I/O methods.
+template<> McIoOutputStream& 
+mc::f64::write(McIoOutputStream& outputStream) const {
+	return out<double, concreteconv<double, uint64_t, htonll> >(outputStream, *this);
+}
+
+template<> McIoInputStream&
+mc::f64::read(McIoInputStream& inputStream) {
+	return in<double, concreteconv<double, uint64_t, htonll> >(inputStream, *this);
+}

@@ -228,6 +228,10 @@ typedef McDtDataType<uint32_t, McDtFlavourFixed>   u32;
 typedef McDtDataType<int64_t,  McDtFlavourFixed>   s64;
 /// Unsigned 64-bit big-endian integer.
 typedef McDtDataType<uint64_t, McDtFlavourFixed>   u64;
+/// Single precision IEEE-754 float point number.
+typedef McDtDataType<float,    McDtFlavourFixed>   f32;
+/// Double precision IEEE-754 float point number.
+typedef McDtDataType<double,   McDtFlavourFixed>   f64;
 
 /**
  * The unicode (utf-16 while processing, utf-8 while transmitting) string.
