@@ -56,6 +56,7 @@ public:
 	
 	/// The const type casting operator, to extract the internal data.
 	inline operator const T&() const { return data; }
+	inline operator T&&() { return std::move(data); }
 		
 	// Allow assignment between data type of different flavours.
 	template<typename U>
@@ -141,14 +142,47 @@ public:
 	McDtDataType(): data() {}
 	McDtDataType(const std::u16string& data): data(data) 
 		{	ensureLengthConstrain();	}
-	McDtDataType(std::u16string&& data): data(data) 
+	McDtDataType(std::u16string&& data): data(std::move(data))
 		{	ensureLengthConstrain();	}
 	
 	inline operator const std::u16string&() const { return data; }
-	inline McDtDataType& operator=(const McDtDataType& a) 
-			{ data = a.data;  return *this; }
-	inline McDtDataType& operator=(McDtDataType&& a) 
-			{ data = std::forward<McDtDataType>(a.data);  return *this; }
+	inline operator std::u16string&&() const { return std::move(data); }
+	
+	template<typename F>
+	inline McDtDataType& operator=(const McDtDataType<std::u16string, F>& a) { 
+		if(std::is_same<McDtFlavourString<maxLength>, F>::value) {
+			// No check required to perform, directly copy assign.
+			data = a.data; 
+		}
+		else {
+			// Check copied value before copy assigning.
+			using std::swap;
+			McDtDataType checkingObject(std::move((std::u16string&&)a));
+			swap(data, checkingObject.data);
+		}
+		return *this; 
+	}
+	
+	template<typename F>
+	inline McDtDataType& operator=(McDtDataType<std::u16string, F>& a) { 
+		return operator=(const_cast<const McDtDataType<std::u16string, F>&>(a));
+	}
+	
+	template<typename F>
+	inline McDtDataType& operator=(McDtDataType<std::u16string, F>&& a) {
+		if(std::is_same<McDtFlavourString<maxLength>, F>::value) {
+			// No check required to perform, directly move assign.
+			data = std::move(a.data); 
+		}
+		else {
+			// Check copied value before move assigning.
+			using std::swap;
+			McDtDataType checkingObject(std::move((std::u16string&&)a));
+			swap(data, checkingObject.data);
+		}
+		return *this; 
+	}
+	
 	McIoInputStream& read(McIoInputStream& inputStream);
 	McIoOutputStream& write(McIoOutputStream& outputStream) const {
 		return McIoWriteUtf16String(outputStream, data);
