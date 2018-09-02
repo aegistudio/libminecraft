@@ -166,6 +166,15 @@ namespace McDtUnionAction {
 				valueValid, dstBuffer, srcBuffer);
 		}
 	};
+	
+	// The reserve action of move assign, used for fallback actions.
+	struct reverseMoveAssign {
+		// Just swap src buffer and dst buffer's location.
+		template<typename U> static inline void
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) {
+			moveAssign::template perform<U>(valueValid, srcBuffer, dstBuffer);
+		}
+	};
 };
  
 /**
@@ -423,13 +432,15 @@ public:
 	
 	/// Type-casting method of this class. Which wraps the asType<V>() 
 	/// method and will throw exception when failing to cast.
-	template<typename V>
-	operator const V&() const { return asType<V>(); }
+	template<typename V> operator const V&() const { return asType<V>(); }
 	
 	/// Type-casting method of this class, just like the constant 
 	/// casting version.
-	template<typename V>
-	operator V&() { return asType<V>(); }
+	template<typename V> operator V&() { return asType<V>(); }
+	
+	/// Still type casting, in the flavour of functor operation.
+	template<typename V> const V& operator()() const { return asType<V>(); }
+	template<typename V> V& operator()() { return asType<V>(); }
 };
 
 /// Use namespace 'mc' to separate cunion and cuinfo from global namespace.
