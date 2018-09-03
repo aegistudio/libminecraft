@@ -186,7 +186,7 @@ public:
 			McDtUnionAction::moveConstruct, 
 			McDtUnionAction::reverseMoveAssign>
 				(m_length, newBuffer.get(), items.get());
-		else memcpy(newBuffer.get(), items.get(), m_length);
+		else memcpy(newBuffer.get(), items.get(), m_length * stride);
 		
 		// Safely swap and update the capacity.
 		std::swap(newBuffer, items);
@@ -221,11 +221,11 @@ public:
 		ordinal(SIZE_MAX), stride(1), isTrivial(true) {}
 	
 	// Copy status of other another nbt list.
-	McDtNbtList(const McDtNbtList& a): items(new char[a.m_capacity]), 
+	McDtNbtList(const McDtNbtList& a): items(new char[a.m_capacity * stride]), 
 		m_length(a.m_length), m_capacity(a.m_capacity),
 		ordinal(a.ordinal), stride(a.stride), isTrivial(a.isTrivial) {
 		
-		if(isTrivial) memcpy(items.get(), a.items.get(), a.size());
+		if(isTrivial) memcpy(items.get(), a.items.get(), a.size() * stride);
 		else allocate<McDtUnionAction::copyConstruct>(m_length, items.get(), 
 				const_cast<char*>(a.items.get()));
 	}
@@ -260,7 +260,7 @@ public:
 		ordinal(info.ordinalOf<V>()), stride(sizeof(typename V::type)), 
 		isTrivial(std::is_fundamental<typename V::type>::value) {
 		
-		if(isTrivial) memcpy(items.get(), reinterpret_cast<const char*>(v.data()), m_length);
+		if(isTrivial) memcpy(items.get(), reinterpret_cast<const char*>(v.data()), m_length * stride);
 		else allocate<McDtUnionAction::copyConstruct>(m_length, items.get(), 
 				const_cast<char*>(reinterpret_cast<const char*>(v.data())));
 	}
@@ -272,7 +272,7 @@ public:
 		ordinal(info.ordinalOf<V>()), stride(sizeof(typename V::type)), 
 		isTrivial(std::is_fundamental<typename V::type>::value) {
 		
-		if(isTrivial) memcpy(items.get(), reinterpret_cast<const char*>(v.data()), m_length);
+		if(isTrivial) memcpy(items.get(), reinterpret_cast<const char*>(v.data()), m_length * stride);
 		else allocate<McDtUnionAction::moveConstruct>(m_length, items.get(), 
 				const_cast<char*>(reinterpret_cast<const char*>(v.data())));
 	}
