@@ -30,6 +30,9 @@ public:
 	
 	/// The implemented read method.
 	virtual void read(char* buffer, size_t receiveLength) override;
+	
+	/// The implemented skip method.
+	virtual void skip(size_t skipLength) override;
 };
 
 /**

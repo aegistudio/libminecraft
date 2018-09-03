@@ -360,6 +360,12 @@ public:
 	McDtNbtListAccessor<V> asType() {
 		return McDtNbtListAccessor<V>(*this);
 	}
+	
+	/// Get a copied union from the array as an element.
+	McDtNbtPayload operator[](size_t i) const {
+		return McDtNbtPayload(ordinal, const_cast<char*>(indexBlock(i)), 
+				McDtUnionAction::copyConstruct());
+	}
 };
 static_assert(	std::is_copy_constructible<McDtNbtList>::value &&
 				std::is_move_constructible<McDtNbtList>::value,
@@ -368,7 +374,7 @@ static_assert(	std::is_copy_constructible<McDtNbtList>::value &&
 // Provide std operation specification for nbt classes.
 namespace std {
 	/// Define the std::swap operation for nbt list.
-	void swap(McDtNbtList& llist, McDtNbtList& rlist) {
+	inline void swap(McDtNbtList& llist, McDtNbtList& rlist) {
 		llist.swap(rlist);
 	}
 }
@@ -381,11 +387,14 @@ typedef std::pair<mc::jstring, McDtNbtPayload> McDtNbtItem;
 class McDtFlavourNbt;
 namespace mc {		// Forward of the minecraft namespace.
 typedef McDtNbtCompound nbtcompound;
-typedef McDtDataType<McDtNbtItem, McDtFlavourNbt> nbt;
+typedef McDtDataType<McDtNbtItem, McDtFlavourNbt> nbtitem;
 
 typedef McDtNbtList nbtlist;
 template<typename V>
 using nbttypedlist = nbtlist::McDtNbtListAccessor<V>;
+
+template<typename I>
+using nbtintarray = mc::array<I, mc::s32>;
 };					// End of forwarded minecraft namespace.
 
 // Begin to tell us what to do with the payloadData block.
@@ -416,7 +425,7 @@ McDtNbtCompound::McDtNbtCompoundData::operator=(const U& v) {
 	return *this;
 }
 
-McDtNbtCompound::McDtNbtCompoundData& 
+inline McDtNbtCompound::McDtNbtCompoundData& 
 McDtNbtCompound::McDtNbtCompoundData::operator=(const char16_t* v) {
 	((McDtNbtPayload&)*this) = mc::jstring(v);
 	return *this;
@@ -427,3 +436,9 @@ McDtNbtCompound::McDtNbtCompoundData::operator=(U&& v) {
 	((McDtNbtPayload&)*this) = std::forward<U>(v);
 	return *this;
 }
+
+// Some I/O methods for other modules to work with nbt.
+// Please notice that mc::nbtitem::read and mc::nbtitem::write are already there for 
+// reading/writing wildcard nbt data. But usually we would prefer SAX style processor, 
+// for compacting size and improve runtime proessing efficiency.
+void McIoReadNbtCompound(McIoInputStream&, mc::nbtcompound& compound);

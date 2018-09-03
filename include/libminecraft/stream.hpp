@@ -32,6 +32,14 @@ public:
 	 * @param[in] receiveLength the length of the data to receive.
 	 */
 	virtual void read(char* buffer, size_t receiveLength) = 0;
+	
+	/**
+	 * @brief skip several bytes of data. Intended for more efficient
+	 * I/O operations (if no data transfer / copying is needed).
+	 *
+	 * @param[in] skipLength the length of data to skip.
+	 */
+	virtual void skip(size_t skipLength) = 0;
 };
 
 /// @brief Abstraction for the output stream.

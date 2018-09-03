@@ -24,6 +24,18 @@ void McIoBufferInputStream::read(char* outBuffer, size_t receiveLength) {
 	size -= receiveLength;
 }
 
+/// Implementation for the McIoBufferInputStream::skip().
+void McIoBufferInputStream::skip(size_t skipLength) {
+	/// Make sure that enough data can be skipped from the buffer.
+	if(skipLength == 0) return;
+	if(skipLength > size) throw std::runtime_error(
+			"Requested data has exceeded the available data.");
+	
+	// Perform skipping and advance status.
+	buffer += skipLength;
+	size -= skipLength;
+}
+
 /// The max allowed size of variant integer, which is 32-bit integer with most 
 /// significant bit set to 0.
 unsigned long maxVarintValue = 0x07ffffffful;

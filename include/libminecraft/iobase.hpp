@@ -352,6 +352,15 @@ inline std::string str(const McDtDataType<std::u16string, F>& data) {
 }
 
 /**
+ * @brief Convert locale imbued std::string to std::u16string type.
+ * @param[in] data The data type instance holding the locale imbued string.
+ * @return the utf-16 string.
+ */
+inline std::u16string u16str(const std::string& data) {
+	return McIoLocaleStringToUtf16(data);
+}
+ 
+/**
  * The array used in minecraft, with a value type and a length type. Both value 
  * type and length type should be protocol version independent while calling
  * read and write method.

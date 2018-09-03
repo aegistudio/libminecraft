@@ -296,6 +296,30 @@ public:
 				(type, valueValid, (char*)value, (char*)a.value);
 	}
 	
+	/// Move assignment for the typed union object.
+	McDtUnion& operator=(McDtUnion&& a) {
+		if(valueValid && type == a.type) {
+			info.template byOrdinal<McDtUnionAction::moveAssign>
+					(type, valueValid, (char*)value, (char*)a.value);
+		}
+		else {
+			if(valueValid)
+				info.template byOrdinal<McDtUnionAction::destruct>
+					(type, valueValid, (char*)value);
+			type = a.type;
+			info.template byOrdinal<McDtUnionAction::moveConstruct>
+					(type, valueValid, (char*)value, (char*)a.value);
+		}
+	}
+	
+	/// Specially construction from another pointer with given ordinal.
+	template<typename Action>
+	McDtUnion(size_t ordinal, char* pointer, Action action): 
+			type(ordinal), valueValid(false) {
+		info.template byOrdinal<Action>(type, 
+			valueValid, (char*)value, pointer);
+	}
+	
 	/// Destructor for the typed union object.
 	~McDtUnion() noexcept {
 		if(valueValid) try {
@@ -360,6 +384,9 @@ public:
 		return const_cast<V&>(
 			static_cast<const McDtUnion&>(*this).asType<V>());
 	}
+	
+	/// Return that whether there's nothing held in the union.
+	bool isNull() const { return !valueValid; }
 	
 	/// Assigning an immutable object to the object stored in the union.
 	/// If the stored object is not of the assigend object's type, it 
