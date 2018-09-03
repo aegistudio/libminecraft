@@ -98,6 +98,14 @@ public:
 	// Delegate the erase() and count() method.
 	bool erase(const std::u16string& key) { return entries -> erase(key); }
 	size_t count(const std::u16string& key) { return entries -> count(key); }
+	
+	// The iterator and const iterator methods.
+	typedef nbtMapType::iterator iterator;
+	typedef nbtMapType::const_iterator const_iterator;
+	iterator begin()				{	return entries -> begin();		}
+	iterator end()					{	return entries -> end();		}
+	const_iterator cbegin() const	{	return entries -> cbegin();		}
+	const_iterator cend() 	const	{	return entries -> cend();		}
 };
 static_assert(	std::is_copy_constructible<McDtNbtCompound>::value &&
 				std::is_move_constructible<McDtNbtCompound>::value,
@@ -332,6 +340,12 @@ public:
 					"list is not of specified type.");
 			else push_back(mc::jstring(v));
 		}
+		
+		// Iterator methods and const iterator methods.
+		V* begin()				{	return (V*)list.indexBlock(0); 					}
+		V* end()				{	return (V*)list.indexBlock(list.size()); 		}
+		const V* cbegin() const {	return (const V*)list.indexBlock(0); 			}
+		const V* cend()	const 	{	return (const V*)list.indexBlock(list.size()); 	}
 	};
 	
 	// Get a typed accessor of the list.
@@ -384,6 +398,8 @@ inline McDtNbtCompoundData::operator const McDtNbtPayload&() const
 	{	return *reinterpret_cast<const McDtNbtPayload*>(payloadData);	}
 inline McDtNbtPayload* McDtNbtCompoundData::operator->()
 	{	return reinterpret_cast<McDtNbtPayload*>(payloadData);	}
+inline const McDtNbtPayload* McDtNbtCompoundData::operator->() const
+	{	return reinterpret_cast<const McDtNbtPayload*>(payloadData);	}
 	
 // Special assignment methods to make it just like its payload counter part.
 template<typename U> McDtNbtCompoundData& 
