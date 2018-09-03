@@ -48,33 +48,40 @@ typedef mc::cuinfo<
 /// the tag index before the nbt's tag name. 
 typedef McDtUnion<McDtNbtTagEnum> McDtNbtPayload;
 
-/// @brief The nbt compound data serving as access points to entries in 
-/// the nbt compound's accessing point.
-struct McDtNbtCompoundData {
-	// The basic constructor and destructors.
-	McDtNbtCompoundData();
-	McDtNbtCompoundData(const McDtNbtCompoundData& block);
-	McDtNbtCompoundData(McDtNbtCompoundData&& block);
-	~McDtNbtCompoundData();
-	
-	// The methods reflecting the underlying payload instance.
-	operator McDtNbtPayload&();
-	operator const McDtNbtPayload&() const;
-	McDtNbtPayload* operator->();
-	const McDtNbtPayload* operator->() const;
-	
-	// The method reflecting payload's assignment methods.
-	template<typename U> McDtNbtCompoundData& operator=(const U&);
-	template<typename U> McDtNbtCompoundData& operator=(U&&);
-	McDtNbtCompoundData& operator=(const char16_t*);
-	
-	static constexpr size_t payloadDataBlockSize = 64;
-private:
-	char payloadData[payloadDataBlockSize];
-};
-
 /// @brief The nbt compound storing key-value data in nbt format.
 class McDtNbtCompound {
+public:	
+	/// @brief The nbt compound data serving as access points to entries in 
+	/// the nbt compound's accessing point.
+	class McDtNbtCompoundData {
+		// The basic constructor and destructors.
+		McDtNbtCompoundData();
+		McDtNbtCompoundData(const McDtNbtCompoundData& block);
+		McDtNbtCompoundData(McDtNbtCompoundData&& block);
+		~McDtNbtCompoundData();
+		
+		// This class cannot be constructed by user, and it could be only
+		// constructed by its container classes.
+		friend class McDtNbtCompound;
+		friend class std::pair<std::u16string, McDtNbtCompoundData>;
+		friend class std::pair<const std::u16string, McDtNbtCompoundData>;
+	public:
+		// The methods reflecting the underlying payload instance.
+		operator McDtNbtPayload&();
+		operator const McDtNbtPayload&() const;
+		McDtNbtPayload* operator->();
+		const McDtNbtPayload* operator->() const;
+		
+		// The method reflecting payload's assignment methods.
+		template<typename U> McDtNbtCompoundData& operator=(const U&);
+		template<typename U> McDtNbtCompoundData& operator=(U&&);
+		McDtNbtCompoundData& operator=(const char16_t*);
+		
+		static constexpr size_t payloadDataBlockSize = 64;
+	private:
+		char payloadData[payloadDataBlockSize];
+	};
+private:
 	typedef std::unordered_map<std::u16string, McDtNbtCompoundData> nbtMapType;
 	std::unique_ptr<nbtMapType> entries;
 public:
@@ -382,39 +389,41 @@ using nbttypedlist = nbtlist::McDtNbtListAccessor<V>;
 };					// End of forwarded minecraft namespace.
 
 // Begin to tell us what to do with the payloadData block.
-static_assert(sizeof(McDtNbtPayload) <= McDtNbtCompoundData::payloadDataBlockSize,
-	"The payload data block is not big to hold payload content.");
-inline McDtNbtCompoundData::McDtNbtCompoundData() 
+// This block are defined after the size of payload data could be determined.
+static_assert(sizeof(McDtNbtPayload) <= McDtNbtCompound::McDtNbtCompoundData
+	::payloadDataBlockSize, "The payload data block is not big to hold payload content.");
+inline McDtNbtCompound::McDtNbtCompoundData::McDtNbtCompoundData() 
 	{	new (payloadData) McDtNbtPayload;		}
-inline McDtNbtCompoundData::McDtNbtCompoundData(const McDtNbtCompoundData& block) 
+inline McDtNbtCompound::McDtNbtCompoundData::McDtNbtCompoundData(const McDtNbtCompoundData& block) 
 	{	new (payloadData) McDtNbtPayload((const McDtNbtPayload&)block);	};
-inline McDtNbtCompoundData::McDtNbtCompoundData(McDtNbtCompoundData&& block) 
+inline McDtNbtCompound::McDtNbtCompoundData::McDtNbtCompoundData(McDtNbtCompoundData&& block) 
 	{	new (payloadData) McDtNbtPayload(std::move((McDtNbtPayload&&)block));	};
-inline McDtNbtCompoundData::~McDtNbtCompoundData() 
+inline McDtNbtCompound::McDtNbtCompoundData::~McDtNbtCompoundData() 
 	{	((McDtNbtPayload*)payloadData) -> ~McDtNbtPayload();	}
-inline McDtNbtCompoundData::operator McDtNbtPayload&() 
+inline McDtNbtCompound::McDtNbtCompoundData::operator McDtNbtPayload&() 
 	{	return *reinterpret_cast<McDtNbtPayload*>(payloadData);	}
-inline McDtNbtCompoundData::operator const McDtNbtPayload&() const
+inline McDtNbtCompound::McDtNbtCompoundData::operator const McDtNbtPayload&() const
 	{	return *reinterpret_cast<const McDtNbtPayload*>(payloadData);	}
-inline McDtNbtPayload* McDtNbtCompoundData::operator->()
+inline McDtNbtPayload* McDtNbtCompound::McDtNbtCompoundData::operator->()
 	{	return reinterpret_cast<McDtNbtPayload*>(payloadData);	}
-inline const McDtNbtPayload* McDtNbtCompoundData::operator->() const
+inline const McDtNbtPayload* McDtNbtCompound::McDtNbtCompoundData::operator->() const
 	{	return reinterpret_cast<const McDtNbtPayload*>(payloadData);	}
 	
 // Special assignment methods to make it just like its payload counter part.
-template<typename U> McDtNbtCompoundData& 
-McDtNbtCompoundData::operator=(const U& v) {
+template<typename U> McDtNbtCompound::McDtNbtCompoundData& 
+McDtNbtCompound::McDtNbtCompoundData::operator=(const U& v) {
 	((McDtNbtPayload&)*this) = v;
 	return *this;
 }
 
-McDtNbtCompoundData& McDtNbtCompoundData::operator=(const char16_t* v) {
+McDtNbtCompound::McDtNbtCompoundData& 
+McDtNbtCompound::McDtNbtCompoundData::operator=(const char16_t* v) {
 	((McDtNbtPayload&)*this) = mc::jstring(v);
 	return *this;
 }
 
-template<typename U> McDtNbtCompoundData& 
-McDtNbtCompoundData::operator=(U&& v) {
+template<typename U> McDtNbtCompound::McDtNbtCompoundData& 
+McDtNbtCompound::McDtNbtCompoundData::operator=(U&& v) {
 	((McDtNbtPayload&)*this) = std::forward<U>(v);
 	return *this;
 }
