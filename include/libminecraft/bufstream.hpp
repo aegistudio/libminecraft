@@ -7,6 +7,7 @@
  * Defines concrete stream which are built on concrete buffers.
  */
 #include "libminecraft/stream.hpp"
+#include "libminecraft/markable.hpp"
 #include <vector>
 #include <tuple>
 
@@ -17,7 +18,7 @@
  * The stream offers boundary check, and exception will be 
  * thrown if boundary has exceeds.
  */
-class McIoBufferInputStream : public McIoInputStream {
+class McIoBufferInputStream : public McIoMarkableStream {
 	/// The underlying buffer to read data from.
 	const char* buffer;
 	
@@ -33,6 +34,9 @@ public:
 	
 	/// The implemented skip method.
 	virtual void skip(size_t skipLength) override;
+	
+	/// The implemented mark method.
+	virtual std::unique_ptr<McIoStreamMark> mark() override;
 };
 
 /**

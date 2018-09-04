@@ -36,6 +36,34 @@ void McIoBufferInputStream::skip(size_t skipLength) {
 	size -= skipLength;
 }
 
+/// Implementation for the McIoInputStream::mark().
+std::unique_ptr<McIoStreamMark> McIoBufferInputStream::mark() {
+	/// The stream marking for buffer input stream.
+	struct McIoBufferStreamMark : public McIoStreamMark {
+		// The reference to the stream.
+		McIoBufferInputStream& stream;
+		
+		// Captured state of the stream marking.
+		size_t size;
+		const char* buffer;
+		
+		// The constructor and destructor.
+		McIoBufferStreamMark(McIoBufferInputStream& stream, 
+			size_t size, const char* buffer):
+			stream(stream), size(size), buffer(buffer) {}
+		~McIoBufferStreamMark() {}
+		
+		// The reset marking method.
+		virtual void reset() override {
+			stream.size = size;
+			stream.buffer = buffer;
+		}
+	};
+	
+	return std::unique_ptr<McIoStreamMark>(
+			new McIoBufferStreamMark(*this, size, buffer));
+}
+
 /// The max allowed size of variant integer, which is 32-bit integer with most 
 /// significant bit set to 0.
 unsigned long maxVarintValue = 0x07ffffffful;

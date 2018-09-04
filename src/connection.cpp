@@ -215,7 +215,7 @@ void McIoConnection::indicateDisconnect() noexcept {
 McIoNextStatus McIoConnection::handle(McIoEvent& events) {
 	// Attempt to perform I/O first.
 	McIoNextStatus readNext = ((McIoConnectionControl*)control) -> handleRead(
-		events, [this](size_t packetSize, McIoInputStream& inputStream) 
+		events, [this](size_t packetSize, McIoMarkableStream& inputStream) 
 				{ handle(packetSize, inputStream); });
 	McIoNextStatus writeNext = handleWrite(events);
 	

@@ -10,6 +10,7 @@
  */
 #include "libminecraft/multiplexer.hpp"
 #include "libminecraft/stream.hpp"
+#include "libminecraft/markable.hpp"
 #include "libminecraft/writable.hpp"
 
 class McIoConnection : public McIoDescriptor, public McIoWritable {
@@ -63,7 +64,7 @@ private:
 	 * no more data to send to a read-closed stream, the socket will
 	 * be removed from the multiplexer.
 	 */
-	virtual void handle(size_t packetSize, McIoInputStream& inputStream) = 0;
+	virtual void handle(size_t packetSize, McIoMarkableStream& inputStream) = 0;
 protected:
 	/**
 	 * @brief Indicate the client to be disconnected, when the data 
