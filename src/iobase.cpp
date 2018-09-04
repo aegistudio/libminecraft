@@ -419,10 +419,12 @@ McIoOutputStream& McIoWriteUtf16String(McIoOutputStream& outputStream,
 // Implementations for utf-16 with locale imbued string conversion.
 typedef std::wstring_convert<std::codecvt_utf8<char16_t>, char16_t> McIoUtf16StringConverter;
 std::u16string McIoLocaleStringToUtf16(const std::string& localeImbuedString) {
+	if(localeImbuedString.length() == 0) return std::u16string();
 	return McIoUtf16StringConverter().from_bytes(localeImbuedString);
 }
 
 std::string McIoUtf16StringLocale(const std::u16string& utf16String) {
+	if(utf16String.length() == 0) return std::string();
 	return McIoUtf16StringConverter().to_bytes(utf16String);
 }
 

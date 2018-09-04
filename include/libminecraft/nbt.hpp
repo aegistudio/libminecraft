@@ -96,6 +96,21 @@ public:
 		swap(entries, a.entries);
 	}
 	
+	// Assignment operators for NbtCompound.
+	McDtNbtCompound& operator=(const McDtNbtCompound& a) {
+		*entries = *a.entries;
+		return *this;
+	}
+	
+	McDtNbtCompound& operator=(McDtNbtCompound& a) {
+		return (*this) = const_cast<McDtNbtCompound&>(a);
+	}
+	
+	McDtNbtCompound& operator=(McDtNbtCompound&& a) {
+		using std::swap;
+		swap(entries, a.entries);
+	}
+	
 	// Delegates the indexed-by-key method.
 	McDtNbtCompoundData& operator[](const std::u16string& key) 
 		{	return (*entries)[key];	}
@@ -221,7 +236,7 @@ public:
 		ordinal(SIZE_MAX), stride(1), isTrivial(true) {}
 	
 	// Copy status of other another nbt list.
-	McDtNbtList(const McDtNbtList& a): items(new char[a.m_capacity * stride]), 
+	McDtNbtList(const McDtNbtList& a): items(new char[a.m_capacity * a.stride]), 
 		m_length(a.m_length), m_capacity(a.m_capacity),
 		ordinal(a.ordinal), stride(a.stride), isTrivial(a.isTrivial) {
 		
@@ -255,9 +270,9 @@ public:
 	// Copy construct from the generic type.
 	template<typename V>
 	McDtNbtList(const std::vector<V>& v): 
-		items(new char[v.capacity() * sizeof(typename V::type)]), 
+		items(new char[v.capacity() * sizeof(V)]), 
 		m_length(v.size()), m_capacity(v.capacity()),
-		ordinal(info.ordinalOf<V>()), stride(sizeof(typename V::type)), 
+		ordinal(info.ordinalOf<V>()), stride(sizeof(V)), 
 		isTrivial(std::is_fundamental<typename V::type>::value) {
 		
 		if(isTrivial) memcpy(items.get(), reinterpret_cast<const char*>(v.data()), m_length * stride);
@@ -267,9 +282,9 @@ public:
 	
 	// Move construct for the generic type.
 	template<typename V> McDtNbtList(std::vector<V>&& v):
-		items(new char[v.capacity() * sizeof(typename V::type)]), 
+		items(new char[v.capacity() * sizeof(V)]), 
 		m_length(v.size()), m_capacity(v.capacity()),
-		ordinal(info.ordinalOf<V>()), stride(sizeof(typename V::type)), 
+		ordinal(info.ordinalOf<V>()), stride(sizeof(V)), 
 		isTrivial(std::is_fundamental<typename V::type>::value) {
 		
 		if(isTrivial) memcpy(items.get(), reinterpret_cast<const char*>(v.data()), m_length * stride);
