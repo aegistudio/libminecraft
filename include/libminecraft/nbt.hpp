@@ -44,6 +44,11 @@ typedef mc::cuinfo<
 	mc::array<mc::s32, mc::s32>, mc::array<mc::s64, mc::s32>
 > McDtNbtTagEnum;
 
+// Declare the mc::nbtinfo (constexpr) into the mc namespace.
+namespace mc {
+static constexpr McDtNbtTagEnum nbtinfo = McDtNbtTagEnum();
+} // End of putting nbtinfo into mc namespace.
+
 /// @brief The payload of an nbt item, which should be identified by 
 /// the tag index before the nbt's tag name. 
 typedef McDtUnion<McDtNbtTagEnum> McDtNbtPayload;
@@ -164,7 +169,7 @@ class McDtNbtList {
 			// Perform block allocation.
 			for(i = 0; i < size; ++ i) {
 				bool valueValid = false;
-				info.template byOrdinal<allocateAction>(
+				mc::nbtinfo.template byOrdinal<allocateAction>(
 					(int32_t)ordinal, valueValid, 
 					dstBuffer + i * stride, srcBuffer + i * stride);
 			}
@@ -172,7 +177,7 @@ class McDtNbtList {
 			// Destroy already allocated elements.
 			for(i = i - 1; i >= 0; ++ i) {
 				bool valueValid = true;
-				info.template byOrdinal<fallbackAction>(
+				mc::nbtinfo.template byOrdinal<fallbackAction>(
 					(int32_t)ordinal, valueValid, 
 					dstBuffer + i * stride, srcBuffer + i * stride);
 			}
@@ -182,9 +187,6 @@ class McDtNbtList {
 public:
 	// Forwarded to the templates requring type entry.
 	typedef McDtNbtList type;
-	
-	// Shadowed information for the nbt union.
-	static constexpr McDtNbtTagEnum info = McDtNbtTagEnum();
 
 	// Basic std::vector like operations.
 	inline size_t size() const { return m_length; }
@@ -224,7 +226,7 @@ public:
 			// Destroy trailing objects (if not trivial).
 			if(!isTrivial) for(; m_length > newSize; -- m_length) {
 				bool valueValid = true;
-				info.template byOrdinal<McDtUnionAction::destruct>(
+				mc::nbtinfo.template byOrdinal<McDtUnionAction::destruct>(
 				(int32_t)ordinal, valueValid, indexBlock(m_length - 1), nullptr);
 			}
 			else m_length = newSize;
@@ -261,7 +263,7 @@ public:
 	~McDtNbtList() {
 		if(items != NULL && !isTrivial) for(size_t i = 0; i < size(); ++ i) {
 			bool valueValid = true;
-			info.template byOrdinal<McDtUnionAction::destruct>(
+			mc::nbtinfo.template byOrdinal<McDtUnionAction::destruct>(
 				(int32_t)ordinal, valueValid, indexBlock(i), nullptr);
 			valueValid = false;
 		}
@@ -272,7 +274,7 @@ public:
 	McDtNbtList(const std::vector<V>& v): 
 		items(new char[v.capacity() * sizeof(V)]), 
 		m_length(v.size()), m_capacity(v.capacity()),
-		ordinal(info.ordinalOf<V>()), stride(sizeof(V)), 
+		ordinal(mc::nbtinfo.ordinalOf<V>()), stride(sizeof(V)), 
 		isTrivial(std::is_fundamental<typename V::type>::value) {
 		
 		if(isTrivial) memcpy(items.get(), reinterpret_cast<const char*>(v.data()), m_length * stride);
@@ -284,7 +286,7 @@ public:
 	template<typename V> McDtNbtList(std::vector<V>&& v):
 		items(new char[v.capacity() * sizeof(V)]), 
 		m_length(v.size()), m_capacity(v.capacity()),
-		ordinal(info.ordinalOf<V>()), stride(sizeof(V)), 
+		ordinal(mc::nbtinfo.ordinalOf<V>()), stride(sizeof(V)), 
 		isTrivial(std::is_fundamental<typename V::type>::value) {
 		
 		if(isTrivial) memcpy(items.get(), reinterpret_cast<const char*>(v.data()), m_length * stride);
@@ -313,7 +315,7 @@ public:
 		/// point of internal object's data.
 		/// @throw when the data type in the list is not of the specified type.
 		McDtNbtListAccessor(McDtNbtList& list): list(list) {
-			if(info.template ordinalOf<V>() != list.ordinal) throw std::runtime_error(
+			if(mc::nbtinfo.template ordinalOf<V>() != list.ordinal) throw std::runtime_error(
 				"The element type of the list is not of specified type.");
 		}
 		
@@ -344,8 +346,8 @@ public:
 			}
 			else try {
 				bool valueValid = false;
-				info.template byOrdinal<McDtUnionAction::copyConstruct>(
-					info.template ordinalOf<V>(), valueValid, 
+				mc::nbtinfo.template byOrdinal<McDtUnionAction::copyConstruct>(
+					mc::nbtinfo.template ordinalOf<V>(), valueValid, 
 					list.indexBlock(list.m_length), 
 					reinterpret_cast<char*>(&const_cast<V&>(v)));
 				list.m_length ++;
@@ -357,7 +359,7 @@ public:
 		
 		// Special overload for mc::jstring.
 		void push_back(const char16_t* v) {
-			if(info.template ordinalOf<mc::jstring>() != list.ordinal) 
+			if(mc::nbtinfo.template ordinalOf<mc::jstring>() != list.ordinal) 
 				throw std::runtime_error("The element type of the "
 					"list is not of specified type.");
 			else push_back(mc::jstring(v));

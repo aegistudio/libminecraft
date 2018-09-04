@@ -42,7 +42,7 @@ void McIoReadNbtList(McIoInputStream& inputStream, mc::nbtlist& list) {
 	// Begin reading of the list.
 	switch(listType) {
 #define McNbtReadListSwitch(dataType)\
-		case list.info.ordinalOf<dataType>() + 1: {\
+		case mc::nbtinfo.ordinalOf<dataType>() + 1: {\
 			std::vector<dataType> listVector;\
 			for(size_t i = 0; i < listLength; ++ i) {\
 				dataType data; inputStream >> data;\
@@ -64,7 +64,7 @@ void McIoReadNbtList(McIoInputStream& inputStream, mc::nbtlist& list) {
 		McNbtReadListSwitch(mc::nbtintarray<mc::s64>);
 		
 		// Special case for nbt list.
-		case list.info.ordinalOf<mc::nbtlist>() + 1: {
+		case mc::nbtinfo.ordinalOf<mc::nbtlist>() + 1: {
 			std::vector<mc::nbtlist> listVector;
 			for(size_t i = 0; i < listLength; ++ i) {
 				mc::nbtlist sublist; 
@@ -76,7 +76,7 @@ void McIoReadNbtList(McIoInputStream& inputStream, mc::nbtlist& list) {
 		}; break;
 		
 		// Special case for nbt compound.
-		case list.info.ordinalOf<mc::nbtcompound>() + 1: {
+		case mc::nbtinfo.ordinalOf<mc::nbtcompound>() + 1: {
 			std::vector<mc::nbtcompound> listVector;
 			for(size_t i = 0; i < listLength; ++ i) {
 				mc::nbtcompound compound;
@@ -111,7 +111,7 @@ mc::nbtitem::read(McIoInputStream& inputStream) {
 	// data.
 	switch(tagType) {
 #define McDtNbtReadSwitch(dataType)\
-		case data.second.info.ordinalOf<dataType>(): {\
+		case mc::nbtinfo.ordinalOf<dataType>(): {\
 			dataType dataObject; inputStream >> dataObject;	\
 			data.second = dataObject;						\
 		} break;
@@ -129,14 +129,14 @@ mc::nbtitem::read(McIoInputStream& inputStream) {
 		McDtNbtReadSwitch(mc::nbtintarray<mc::s64>);
 		
 		// The compound data type.
-		case data.second.info.ordinalOf<mc::nbtcompound>(): {
+		case mc::nbtinfo.ordinalOf<mc::nbtcompound>(): {
 			mc::nbtcompound compound;
 			McIoReadNbtCompound(inputStream, compound);
 			data.second = std::move(compound);
 		}; break;
 		
 		// The list data type.
-		case data.second.info.ordinalOf<mc::nbtlist>(): {
+		case mc::nbtinfo.ordinalOf<mc::nbtlist>(): {
 			mc::nbtlist list;
 			McIoReadNbtList(inputStream, list);
 			data.second = std::move(list);
