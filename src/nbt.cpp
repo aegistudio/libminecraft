@@ -89,6 +89,54 @@ void McIoReadNbtList(McIoInputStream& inputStream, mc::nbtlist& list) {
 	}
 }
 
+// To be used by mc::nbtinfo.byOrdinal<V>(), and eliminate duplicate code.
+struct McIoNbtTagItemRead {
+	/**
+	 * @brief The normal read parser for nbt compound types.
+	 * @param[out] dstBuffer must be set to the pointer to McDtNbtPayload.
+	 * @param[inout] srcBuffer must be set to the pointer to McIoInputStream.
+	 * @param[out] valueValid unused.
+	 */
+	template<typename V> static inline  void performRead(
+		McIoInputStream& inputStream, McDtNbtPayload& payload) {
+		V dataObject; inputStream >> dataObject;
+		payload = std::move(dataObject);
+	}
+
+	/**
+	 * @brief The normal read parser for nbt compound types.
+	 * @param[out] dstBuffer must be set to the pointer to McDtNbtPayload.
+	 * @param[inout] srcBuffer must be set to the pointer to McIoInputStream.
+	 * @param[out] valueValid unused.
+	 */
+	template<typename V> static inline void perform(
+		bool& valueValid, char* dstBuffer, char* srcBuffer) {
+		assert(srcBuffer != nullptr && dstBuffer != nullptr);
+		
+		performRead<V>(
+			*reinterpret_cast<McIoInputStream*>(srcBuffer),
+			*reinterpret_cast<McDtNbtPayload*>(dstBuffer));
+	}
+};
+
+/// Specialization for McDtNbtList.
+template<> inline void 
+McIoNbtTagItemRead::performRead<McDtNbtList>(
+	McIoInputStream& inputStream, McDtNbtPayload& payload) {
+	mc::nbtlist list;
+	McIoReadNbtList(inputStream, list);
+	payload = std::move(list);
+}
+
+/// Specialization for McDtNbtCompound.
+template<> inline void 
+McIoNbtTagItemRead::performRead<McDtNbtCompound>(
+	McIoInputStream& inputStream, McDtNbtPayload& payload) {
+	mc::nbtcompound compound;
+	McIoReadNbtCompound(inputStream, compound);
+	payload = std::move(compound);
+}
+
 // Implementation for direct nbt I/O methods.
 template<> McIoInputStream&
 mc::nbtitem::read(McIoInputStream& inputStream) {
@@ -107,39 +155,8 @@ mc::nbtitem::read(McIoInputStream& inputStream) {
 	// Then read the tag of the nbt item.
 	inputStream >> data.first;
 	
-	// Depending on the data, perform reading or deeper processing of the 
-	// data.
-	switch(tagType) {
-#define McDtNbtReadSwitch(dataType)\
-		case mc::nbtinfo.ordinalOf<dataType>(): {\
-			dataType dataObject; inputStream >> dataObject;	\
-			data.second = dataObject;						\
-		} break;
-		
-		// The non-composite data types.
-		McDtNbtReadSwitch(mc::s8);
-		McDtNbtReadSwitch(mc::s16);
-		McDtNbtReadSwitch(mc::s32);
-		McDtNbtReadSwitch(mc::s64);
-		McDtNbtReadSwitch(mc::f32);
-		McDtNbtReadSwitch(mc::f64);
-		McDtNbtReadSwitch(mc::jstring);
-		McDtNbtReadSwitch(mc::nbtintarray<mc::s8>);
-		McDtNbtReadSwitch(mc::nbtintarray<mc::s32>);
-		McDtNbtReadSwitch(mc::nbtintarray<mc::s64>);
-		
-		// The compound data type.
-		case mc::nbtinfo.ordinalOf<mc::nbtcompound>(): {
-			mc::nbtcompound compound;
-			McIoReadNbtCompound(inputStream, compound);
-			data.second = std::move(compound);
-		}; break;
-		
-		// The list data type.
-		case mc::nbtinfo.ordinalOf<mc::nbtlist>(): {
-			mc::nbtlist list;
-			McIoReadNbtList(inputStream, list);
-			data.second = std::move(list);
-		}; break;
-	}
+	// Depending on the tag type, perform reading or deeper processing of the data.
+	bool dummy = false;	// In place of valueValid.
+	mc::nbtinfo.byOrdinal<McIoNbtTagItemRead>(tagType, 
+		dummy, (char*)&(data.second), (char*)&inputStream);
 }
