@@ -33,7 +33,6 @@ void McIoReadNbtCompound(McIoInputStream& inputStream, mc::nbtcompound& compound
 
 // To be used in McIoReadNbtList to eliminate switch and #define.
 struct McIoNbtTagListItemRead {
-	typedef std::tuple<McDtNbtList*, int> dstBufferTuple;
 	/**
 	 * @brief The normal read parser for nbt list types.
 	 * @param[out] dstBuffer must be set to the pointer to McDtNbtPayload.
@@ -150,4 +149,5 @@ mc::nbtitem::read(McIoInputStream& inputStream) {
 	// Depending on the tag type, perform reading or deeper processing of the data.
 	mc::nbtinfo.userByOrdinal<McIoNbtTagItemRead, McIoInputStream&, 
 			McDtNbtPayload&>(tagType, inputStream, data.second);
+	return inputStream;
 }
