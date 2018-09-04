@@ -197,6 +197,15 @@ public:
 		throw std::runtime_error("Union ordinal value exceeds boundary.");
 	}
 	
+	/// Perform an action associated to the ordinal with the object.
+	/// @brief ordinal The ordinal of the object to create.
+	/// @brief args The user defined function parameters.
+	template<typename UserAction, typename... Args>
+	inline static void userByOrdinal(int32_t ordinal, Args... args) {
+		// Ordinal must be greater than or equal the max ordinal this case.
+		throw std::runtime_error("Union ordinal value exceeds boundary.");
+	}
+	
 	/// @return the max size of specified union types.
 	inline static constexpr size_t maxSize() {	return 0;	}
 };
@@ -224,6 +233,7 @@ class McDtUnionInfo<baseOrdinal, T0, T...> {
 	// The next node of union information block.
 	typedef McDtUnionInfo<baseOrdinal + 1, T...> next;
 public:
+	// Used by union to specify union related actions.
 	template<typename Action>
 	inline static void byOrdinal(int32_t ordinal, bool& valueValid,
 				char* dstBuffer, char* srcBuffer = nullptr) {
@@ -234,6 +244,16 @@ public:
 		else next::template byOrdinal<Action>(ordinal, valueValid, dstBuffer, srcBuffer);
 	}
 
+	// Used by user to specify their own by ordinal actions.
+	template<typename UserAction, typename... Args>
+	inline static void userByOrdinal(int32_t ordinal, Args... args) {
+		if(ordinal < baseOrdinal) 
+			throw std::runtime_error("Union ordinal value exceeds boundary");
+		else if(ordinal == baseOrdinal)
+			UserAction::template perform<T0>(args...);
+		else next::template userByOrdinal<UserAction, Args...>(ordinal, args...);
+	}
+	
 	// Helper functions to be used as info.ordinalOf<U>().
 	// The specified type is current union information block's type, so just return current
 	// ordinal as result.

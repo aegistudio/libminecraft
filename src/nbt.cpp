@@ -39,7 +39,7 @@ struct McIoNbtTagListItemRead {
 	 * @param[out] dstBuffer must be set to the pointer to McDtNbtPayload.
 	 * @param[inout] srcBuffer must be set to the pointer to McIoInputStream.
 	 */
-	template<typename V> static inline void performListRead(
+	template<typename V> static inline void perform(
 		McIoInputStream& inputStream, McDtNbtList& list, int listLength) {
 		std::vector<V> listVector;
 		for(size_t i = 0; i < listLength; ++ i) {
@@ -49,26 +49,11 @@ struct McIoNbtTagListItemRead {
 		mc::nbtlist dataList(listVector);
 		list.swap(dataList);
 	}
-	
-	/**
-	 * @brief The forwarded perform method.
-	 */
-	template<typename V> static inline void perform(
-		bool& valueValid, char* dstBuffer, char* srcBuffer) {
-		assert(srcBuffer != nullptr && dstBuffer != nullptr);
-		
-		dstBufferTuple listInformation 
-			= *reinterpret_cast<dstBufferTuple*>(dstBuffer);
-		
-		performListRead<V>(
-			*reinterpret_cast<McIoInputStream*>(srcBuffer),
-			*std::get<0>(listInformation), std::get<1>(listInformation));
-	}
 };
 
 /// Specialization for McDtNbtList.
 template<> inline void 
-McIoNbtTagListItemRead::performListRead<McDtNbtList>(
+McIoNbtTagListItemRead::perform<McDtNbtList>(
 	McIoInputStream& inputStream, McDtNbtList& list, int listLength) {
 	std::vector<mc::nbtlist> listVector;
 	for(size_t i = 0; i < listLength; ++ i) {
@@ -82,7 +67,7 @@ McIoNbtTagListItemRead::performListRead<McDtNbtList>(
 
 /// Specialization for McDtNbtCompound.
 template<> inline void 
-McIoNbtTagListItemRead::performListRead<McDtNbtCompound>(
+McIoNbtTagListItemRead::perform<McDtNbtCompound>(
 	McIoInputStream& inputStream, McDtNbtList& list, int listLength) {
 	std::vector<mc::nbtcompound> listVector;
 	for(size_t i = 0; i < listLength; ++ i) {
@@ -107,10 +92,9 @@ void McIoReadNbtList(McIoInputStream& inputStream, mc::nbtlist& list) {
 	else if(listType == 0) return;
 	
 	// Begin reading of the list.
-	McIoNbtTagListItemRead::dstBufferTuple parameter(&list, listLength);
-	bool dummy = false;	// In place of valueValid.
-	mc::nbtinfo.byOrdinal<McIoNbtTagListItemRead>(listType - 1, 
-		dummy, (char*)&parameter, (char*)&inputStream);
+	mc::nbtinfo.userByOrdinal<McIoNbtTagListItemRead,
+			McIoInputStream&, mc::nbtlist&, mc::s32&>(
+			listType - 1, inputStream, list, listLength);
 }
 
 // To be used in mc::nbt::read() to eliminate switch and #define.
@@ -120,28 +104,16 @@ struct McIoNbtTagItemRead {
 	 * @param[out] dstBuffer must be set to the pointer to McDtNbtPayload.
 	 * @param[inout] srcBuffer must be set to the pointer to McIoInputStream.
 	 */
-	template<typename V> static inline  void performRead(
+	template<typename V> static inline  void perform(
 		McIoInputStream& inputStream, McDtNbtPayload& payload) {
 		V dataObject; inputStream >> dataObject;
 		payload = std::move(dataObject);
-	}
-
-	/**
-	 * @brief The forwarded perform method.
-	 */
-	template<typename V> static inline void perform(
-		bool& valueValid, char* dstBuffer, char* srcBuffer) {
-		assert(srcBuffer != nullptr && dstBuffer != nullptr);
-		
-		performRead<V>(
-			*reinterpret_cast<McIoInputStream*>(srcBuffer),
-			*reinterpret_cast<McDtNbtPayload*>(dstBuffer));
 	}
 };
 
 /// Specialization for McDtNbtList.
 template<> inline void 
-McIoNbtTagItemRead::performRead<McDtNbtList>(
+McIoNbtTagItemRead::perform<McDtNbtList>(
 	McIoInputStream& inputStream, McDtNbtPayload& payload) {
 	mc::nbtlist list;
 	McIoReadNbtList(inputStream, list);
@@ -150,7 +122,7 @@ McIoNbtTagItemRead::performRead<McDtNbtList>(
 
 /// Specialization for McDtNbtCompound.
 template<> inline void 
-McIoNbtTagItemRead::performRead<McDtNbtCompound>(
+McIoNbtTagItemRead::perform<McDtNbtCompound>(
 	McIoInputStream& inputStream, McDtNbtPayload& payload) {
 	mc::nbtcompound compound;
 	McIoReadNbtCompound(inputStream, compound);
@@ -176,7 +148,6 @@ mc::nbtitem::read(McIoInputStream& inputStream) {
 	inputStream >> data.first;
 	
 	// Depending on the tag type, perform reading or deeper processing of the data.
-	bool dummy = false;	// In place of valueValid.
-	mc::nbtinfo.byOrdinal<McIoNbtTagItemRead>(tagType, 
-		dummy, (char*)&(data.second), (char*)&inputStream);
+	mc::nbtinfo.userByOrdinal<McIoNbtTagItemRead, McIoInputStream&, 
+			McDtNbtPayload&>(tagType, inputStream, data.second);
 }
