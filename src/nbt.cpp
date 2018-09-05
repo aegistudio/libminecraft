@@ -10,12 +10,10 @@
 #include "libminecraft/iobase.hpp"
 #include "libminecraft/stream.hpp"
 #include <cassert>
+#include <type_traits>
 
 // The invalid nbt tag type message.
 static const char* invalidNbtTagType = "Expected invalid nbt tag type.";
-
-// The declaration for the NbtList read method.
-void McIoReadNbtList(McIoInputStream& inputStream, mc::nbtlist& list);
 
 // Implementation for McIoReadNbtCompound.
 void McIoReadNbtCompound(McIoInputStream& inputStream, mc::nbtcompound& compound) {
@@ -35,8 +33,9 @@ void McIoReadNbtCompound(McIoInputStream& inputStream, mc::nbtcompound& compound
 struct McIoNbtTagListItemRead {
 	/**
 	 * @brief The normal read parser for nbt list types.
-	 * @param[out] dstBuffer must be set to the pointer to McDtNbtPayload.
-	 * @param[inout] srcBuffer must be set to the pointer to McIoInputStream.
+	 * @param[inout] inputStream the target input stream for reading.
+	 * @param[out] list the element to read data into.
+	 * @param[in] listLength the previously known length of list.
 	 */
 	template<typename V> static inline void perform(
 		McIoInputStream& inputStream, McDtNbtList& list, int listLength) {
@@ -100,8 +99,8 @@ void McIoReadNbtList(McIoInputStream& inputStream, mc::nbtlist& list) {
 struct McIoNbtTagItemRead {
 	/**
 	 * @brief The normal read parser for nbt types.
-	 * @param[out] dstBuffer must be set to the pointer to McDtNbtPayload.
-	 * @param[inout] srcBuffer must be set to the pointer to McIoInputStream.
+	 * @param[inout] inputStream the target input stream for reading.
+	 * @param[out] payload the union to write read data to.
 	 */
 	template<typename V> static inline  void perform(
 		McIoInputStream& inputStream, McDtNbtPayload& payload) {
@@ -150,4 +149,97 @@ mc::nbtitem::read(McIoInputStream& inputStream) {
 	mc::nbtinfo.userByOrdinal<McIoNbtTagItemRead, McIoInputStream&, 
 			McDtNbtPayload&>(tagType, inputStream, data.second);
 	return inputStream;
+}
+
+// Skip normal elements in McIoSkipElement.
+struct McIoNbtTagItemSkip {
+	/**
+	 * @brief The normal skipping method for nbt types.
+	 * @param[inout] inputStream the target input stream for skipping.
+	 */
+	template<typename V> static inline void
+	perform(McIoInputStream& inputStream) {
+		static_assert(std::is_fundamental<typename V::type>::value,
+			"Only primitive type could be specified to the skip!");
+		inputStream.skip(sizeof(V));
+	}
+};
+
+// The specialization for skipping arrays.
+template<typename V>
+inline void McIoNbtArraySkip(McIoInputStream& inputStream) {
+	mc::s32 arrayLength; inputStream >> arrayLength;
+	if(arrayLength <= 0) return;
+	inputStream.skip(arrayLength * sizeof(V));
+}
+
+template<> inline void McIoNbtTagItemSkip
+::perform<mc::array<mc::s8, mc::s32>>(McIoInputStream& inputStream) 
+{	McIoNbtArraySkip<mc::s8>(inputStream);	}
+
+template<> inline void McIoNbtTagItemSkip
+::perform<mc::array<mc::s32, mc::s32>>(McIoInputStream& inputStream) 
+{	McIoNbtArraySkip<mc::s32>(inputStream);	}
+
+template<> inline void McIoNbtTagItemSkip
+::perform<mc::array<mc::s64, mc::s32>>(McIoInputStream& inputStream) 
+{	McIoNbtArraySkip<mc::s64>(inputStream);	}
+	
+// The specialization for skipping mc::nbtlist.
+template<> inline void McIoNbtTagItemSkip
+::perform<mc::nbtlist>(McIoInputStream& inputStream) {
+
+	// Retrieve the the list essentials.
+	mc::s8 tagType; inputStream >> tagType;
+	mc::s32 listLength; inputStream >> listLength;
+	if(tagType == 0 && listLength > 0) 
+		throw std::runtime_error(invalidNbtTagType);
+	else if(tagType == 0 || listLength <= 0) return;
+	else tagType = tagType - 1;
+	
+	// See whether the underlying type is primitive.
+	static const int elementSizes[] = {
+		sizeof(mc::s8), sizeof(mc::s16), 
+		sizeof(mc::s32), sizeof(mc::s64),
+		sizeof(mc::f32), sizeof(mc::f64) };
+	int size = tagType < (sizeof(elementSizes) / sizeof(int))?
+				elementSizes[tagType] : 0;
+	
+	// Perform actual skipping.
+	if(size == 0) for(size_t i = 0; i < listLength; ++ i)
+		McIoSkipNbtElement(inputStream, tagType);
+	else inputStream.skip(size * listLength);
+}
+
+// The specialization for skipping mc::nbtcompounds.
+template<> inline void McIoNbtTagItemSkip
+::perform<mc::nbtcompound>(McIoInputStream& inputStream) {
+	
+	while(true) {
+		// Parse the type of the tag.
+		mc::s8 tagType; inputStream >> tagType;
+		if(tagType == 0) break;
+		else if(tagType < 0 || tagType > 12)
+			throw std::runtime_error(invalidNbtTagType);
+		else tagType = tagType - 1;
+		
+		// Skip according to the tag.
+		McIoSkipNbtElement(inputStream, tagType);
+	}
+}
+
+// The specialization for skipping mc::jstring.
+template<> inline void McIoNbtTagItemSkip
+::perform<mc::jstring>(McIoInputStream& inputStream) {
+	// Retrieve the utf-8 length.
+	mc::u16 stringLength; inputStream >> stringLength;
+	
+	// Just skip the length, don't convert to utf-16.
+	if(stringLength > 0) inputStream.skip(stringLength);
+}
+
+// Implementation for the list type skipping method.
+void McIoSkipNbtElement(McIoInputStream& inputStream, mc::s8 tag) {
+	mc::nbtinfo.userByOrdinal<McIoNbtTagItemSkip, McIoInputStream&>
+		(tag, inputStream);
 }

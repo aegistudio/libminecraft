@@ -459,3 +459,8 @@ McDtNbtCompound::McDtNbtCompoundData::operator=(U&& v) {
 // reading/writing wildcard nbt data. But usually we would prefer SAX style processor, 
 // for compacting size and improve runtime proessing efficiency.
 void McIoReadNbtCompound(McIoInputStream&, mc::nbtcompound& compound);
+void McIoReadNbtList(McIoInputStream&, mc::nbtlist& list);
+
+// Completely skip up to given elements so that the input stream's read pointer points
+// to the next element.
+void McIoSkipNbtElement(McIoInputStream&, mc::s8 type);
