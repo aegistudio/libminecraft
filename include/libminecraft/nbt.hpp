@@ -9,6 +9,7 @@
  */
 #include "libminecraft/union.hpp"
 #include "libminecraft/iobase.hpp"
+#include "libminecraft/markable.hpp"
 #include <unordered_map>
 #include <memory>
 #include <cstring>
@@ -456,7 +457,7 @@ McDtNbtCompound::McDtNbtCompoundData::operator=(U&& v) {
 
 // Some I/O methods for other modules to work with nbt.
 // Please notice that mc::nbtitem::read and mc::nbtitem::write are already there for 
-// reading/writing wildcard nbt data. But usually we would prefer SAX style processor, 
+// reading/writing wildcard nbt data. But usually we would prefer SAX-style processor, 
 // for compacting size and improve runtime proessing efficiency.
 void McIoReadNbtCompound(McIoInputStream&, mc::nbtcompound& compound);
 void McIoReadNbtList(McIoInputStream&, mc::nbtlist& list);
@@ -464,3 +465,77 @@ void McIoReadNbtList(McIoInputStream&, mc::nbtlist& list);
 // Completely skip up to given elements so that the input stream's read pointer points
 // to the next element.
 void McIoSkipNbtElement(McIoInputStream&, mc::s8 type);
+
+/// The SAX processor action corresponding to strongly typed tag.
+struct McDtNbtCompoundSaxAction {
+	/// The type is calculates as follow:
+	/// - When expectedType is between 0 and 12, it refers to the basic nbt types, and 
+	/// for mc::nbtlist, it should accept any list.
+	/// - When expectedType is between 13 and 25, it refers to the mc::nbttypedlist 
+	/// with corresponding ordinal, and the list would be ignored if the internal 
+	/// element type mismatches the expectedType.
+	size_t expectedType;
+	
+	/// Defines the actions when the tag completes its typed checking.
+	/// If the expectedType is between 0 and 12, the inputStream's pointer should 
+	/// be right after the tag name.
+	/// If the expectedType is between 13 and 25, the inputStream's pointer should 
+	/// be after the tag type. (pointing to the first byte of list length).
+	/// @warning this pointer may not be null!
+	void (*tagPresent)(McIoMarkableStream& inputStream, void* data, void* ud);
+	
+	/// Defines prerequisites of invoking tagPresent method.
+	/// It is presented in a list of compound index, with count followed.
+	size_t numPrerequisites;	size_t* prerequisites;
+	
+	/// Invoked when the entry cannot be found, may be null.
+	void (*tagAbsent)(void* data, void* ud);
+	
+	/// Invoked when the tag is present but its prerequisites cannot be resolved.
+	/// The input stream will be still be set to the place of the read tag.
+	/// May be null and will not be invoked if so.
+	void (*tagFailedResolve)(McIoMarkableStream& inputStream, void* data, void* ud);
+};
+
+/// The maximum length of a tag name while being processed in SAX mode, when the 
+/// value exceeds this length, it will simply be ignored, even if could be looked
+/// up in the user dictionary.
+static const size_t McIoSaxMaxNbtTagNameLength = 64;
+
+/**
+ * @brief Perform SAX-style reading of an nbt compound.
+ *
+ * When the proecssor encounters a compound's name tag (shorter than the tag name
+ * length should be ensured), it will first look it up in the dictionary, when the 
+ * returned index is invalid, it will ignore it, depending on whether ignoredTag compound 
+ * is present, it will either skip the data or place the data into the compound.
+ *
+ * If the returned index is valid, it will look up the saxActions, and compare 
+ * the expectedType with actualType, then skip or place it in the ignoredTag if
+ * the type mismatches.
+ *
+ * If the type matches, it will then check for the prerequisites, and mark the 
+ * position if not all prerequisites are met. Else the tagPresent will be invoked,
+ * in which user might copy the data into actual struct, or more verbose processing.
+ *
+ * It is guaranteed that when tagPresent is invoked, the inputStream is right in
+ * the location of the data part of a tag.
+ *
+ * @warning The tag name is presented in utf-8 format, which is different from the type 
+ * stored in the mc::nbtcompound's key and value. As the tag in minecraft are always 
+ * in English, don't convert to utf-16 will eliminate unnecessary logic and simplify 
+ * the logic.
+ *
+ * @param[inout] inputStream the stream to perform SAX reading from, must support mark.
+ * @param[inout] data the currently processing data.
+ * @param[inout] ud the userdata to call tag present, hopefully some control information.
+ * @param[in] dictionary the function to lookup an encountered tag, hopefully a perfect
+ * hash function. Tag would be ignored when returned value < 0 or >= tagLength.
+ * @param[in] numSaxActions indicates number of saxActions followed.
+ * @param[in] saxActions the sax actions to perform.
+ * @param[in] ignoredTag when the items are ignore, it might be placed here.
+ */
+void McIoSaxNbtCompound(McIoMarkableStream& inputStream, void* data, void* ud,
+	int (*dictionary)(size_t tagLength, const char* tagName),
+	size_t numSaxActions, const McDtNbtCompoundSaxAction* const saxActions,
+	McDtNbtCompound* ignoredTag = nullptr);

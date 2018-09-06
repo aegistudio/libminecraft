@@ -11,6 +11,9 @@
 #include "libminecraft/stream.hpp"
 #include <cassert>
 #include <type_traits>
+#include <codecvt>
+#include <locale>
+#include <list>
 
 // The invalid nbt tag type message.
 static const char* invalidNbtTagType = "Expected invalid nbt tag type.";
@@ -238,8 +241,178 @@ template<> inline void McIoNbtTagItemSkip
 	if(stringLength > 0) inputStream.skip(stringLength);
 }
 
-// Implementation for the list type skipping method.
+// Implementation for the skipping method.
 void McIoSkipNbtElement(McIoInputStream& inputStream, mc::s8 tag) {
 	mc::nbtinfo.userByOrdinal<McIoNbtTagItemSkip, McIoInputStream&>
 		(tag, inputStream);
+}
+
+// The inlined place into ignored tag function.
+// The inputStream's current position might either be after the name or 
+// after the name length, and depending on the position, we skip up to 
+// corresponding bytes.
+inline void McIoSaxNbtCompoundPlaceIgnored(McDtNbtCompound* ignoredTag,
+	mc::s8 tagType, size_t nameLength, const char* name, McIoMarkableStream& inputStream) {
+	
+	// See whether the user structure is present.
+	if(ignoredTag != nullptr) {
+		// We have to place the struct into the compound.
+		std::u16string tagName;
+		
+		// The tag string has been read, so convert the read buffer.
+		if(name != nullptr) tagName = std::move(std::wstring_convert<
+			std::codecvt_utf8_utf16<char16_t>, char16_t>()
+			.from_bytes(std::string(name, nameLength)));
+			
+		// The tag string has not been read, so utilize the iobase method.
+		else McIoReadUtf16String(inputStream, nameLength, tagName);
+		
+		// Read and place the payload behind.
+		McDtNbtPayload payload;
+		mc::nbtinfo.userByOrdinal<McIoNbtTagItemRead, McIoInputStream&, 
+			McDtNbtPayload&>(tagType, inputStream, payload);
+		(*ignoredTag)[tagName] = std::move(payload);
+	}
+	else {
+		// We will just effectively skip it.
+		if(name == nullptr) inputStream.skip(nameLength);
+		McIoSkipNbtElement(inputStream, tagType);
+	}
+}
+
+// Check whether all prerequisites of a sax action has met.
+inline bool McIoSaxActionAllMet(std::vector<bool>& present, 
+		const McDtNbtCompoundSaxAction& saxAction) {
+	bool allPrerequisitesMet = true;
+	for(size_t i = 0; i < saxAction.numPrerequisites; ++ i) {
+		if(!present[saxAction.prerequisites[i]])
+			{	allPrerequisitesMet = false; break;	}
+	}
+	return allPrerequisitesMet;
+}
+
+// Implementation for McIoSaxNbtCompound().
+void McIoSaxNbtCompound(McIoMarkableStream& inputStream, void* data, void* ud,
+	int (*dictionary)(size_t tagLength, const char* tagName), size_t numSaxActions, 
+	const McDtNbtCompoundSaxAction* const saxActions, McDtNbtCompound* ignoredTag) {
+	
+	std::vector<bool> present(numSaxActions);
+	size_t numPresents = 0;
+	struct McIoSaxTagMarkItem {
+		size_t action;							///< The index of the action.
+		std::unique_ptr<McIoStreamMark> mark;	///< The mark of the stream.
+	};
+	std::list<McIoSaxTagMarkItem> marks;
+	
+	// Loop until has encountered a tag end.
+	while(true) {
+		// Parse the type and tag name first.
+		mc::s8 type; inputStream >> type;
+		if(type == 0) break;	// Tag end encounters.
+		else if(type < 0 || type > 12) 
+			throw std::runtime_error(invalidNbtTagType);
+		else type = type - 1;
+		mc::u16 tagLength; inputStream >> tagLength;
+		
+		// The tag will never be matched, so just place it in the ignored tags 
+		// or simply skip it.
+		if(tagLength >= McIoSaxMaxNbtTagNameLength) {
+			McIoSaxNbtCompoundPlaceIgnored(ignoredTag, type, 
+				tagLength, nullptr, inputStream);
+			continue;
+		}
+		
+		// The name length is valid, so read it into a buffer and look up the 
+		// dictionary.
+		char nameBuffer[McIoSaxMaxNbtTagNameLength + 1];
+		inputStream.read(nameBuffer, tagLength);
+		int entry = dictionary(tagLength, nameBuffer);
+		
+		// If the entry is not (or will not be) favoured, so just place it outside.
+		if(entry < 0 || entry >= numSaxActions) {
+			McIoSaxNbtCompoundPlaceIgnored(ignoredTag, 
+				type, tagLength, nameBuffer, inputStream);
+			continue;
+		}
+		
+		// Help users to find whether they have initialized the actions correctly.
+		const McDtNbtCompoundSaxAction& saxAction = saxActions[entry];
+		assert(saxAction.expectedType <= 25);
+		
+		// If mismatched (not typed list), also place it outside.
+		if(saxAction.expectedType <= 12 && saxAction.expectedType != type) {
+			McIoSaxNbtCompoundPlaceIgnored(ignoredTag, 
+				type, tagLength, nameBuffer, inputStream);
+			continue;
+		}
+		
+		// If mismatched (typed list), also place it outside.
+		if(saxAction.expectedType > 12) {
+			mc::s8 componentType; inputStream >> componentType;
+			if(componentType + 13 != saxActions[entry].expectedType) {
+				McIoSaxNbtCompoundPlaceIgnored(ignoredTag, 
+					type, tagLength, nameBuffer, inputStream);
+				continue;
+			}
+		}
+		
+		// Depending on whether prerequisite is met, begin processing it or place
+		// it on the mark list.
+		if(McIoSaxActionAllMet(present, saxAction)) {
+			present[entry] = true; ++ numPresents;
+			assert(saxAction.tagPresent != nullptr);
+			saxAction.tagPresent(inputStream, data, ud);
+		}
+		else {
+			std::unique_ptr<McIoStreamMark> mark = inputStream.mark();
+			McIoSaxTagMarkItem item;
+			item.action = entry; 
+			item.mark.swap(mark);
+			marks.push_back(std::move(item));
+		}
+	}
+	
+	// There're entries that requires to be resolved.
+	if(!marks.empty()) {
+		std::unique_ptr<McIoStreamMark> endCompoundMark = inputStream.mark();
+		
+		// Now lets have a look at the prerequisite-not-met entries.
+		// All entries' prerequisite are assumed to be parsed, if there'are N remaining
+		// entries, the worst case of deducing will be N pass full traversal.
+		size_t maxPass = marks.size();
+		for(size_t pass = 0; pass < maxPass && !marks.empty(); ++ pass) {
+			
+			for(auto iter = marks.begin(); iter != marks.end(); ) {
+				const McDtNbtCompoundSaxAction& saxAction = saxActions[iter -> action];
+				
+				if(McIoSaxActionAllMet(present, saxAction)) {
+					iter -> mark -> reset();
+					assert(saxAction.tagPresent != nullptr);
+					saxAction.tagPresent(inputStream, data, ud);
+					present[iter -> action] = true; ++ numPresents;
+					iter = marks.erase(iter);
+				}
+				else ++ iter;
+			}
+		}
+		
+		// Invoke the cannot resolve methods for those who fails to resolve.
+		if(!marks.empty()) {
+			for(auto iter = marks.begin(); iter != marks.end(); ++ iter) {
+				if(saxActions[iter -> action].tagFailedResolve != nullptr) {
+					saxActions[iter -> action].tagFailedResolve
+						(inputStream, data, ud);
+					present[iter -> action] = true; ++ numPresents;
+				}
+			}
+		}
+		
+		// Reset the mark to the last of the stream.
+		endCompoundMark = 0;
+	}
+	
+	// Invoke those who have their not present method registered.
+	if(numPresents < numSaxActions) for(size_t i = 0; i < numSaxActions; ++ i)
+		if((!present[i]) && (saxActions[i].tagAbsent != nullptr))
+			saxActions[i].tagAbsent(data, ud);
 }
