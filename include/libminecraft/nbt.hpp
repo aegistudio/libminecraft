@@ -10,6 +10,7 @@
 #include "libminecraft/union.hpp"
 #include "libminecraft/iobase.hpp"
 #include "libminecraft/markable.hpp"
+#include "libminecraft/member.hpp"
 #include <unordered_map>
 #include <memory>
 #include <cstring>
@@ -462,12 +463,22 @@ McDtNbtCompound::McDtNbtCompoundData::operator=(U&& v) {
 void McIoReadNbtCompound(McIoInputStream&, mc::nbtcompound& compound);
 void McIoReadNbtList(McIoInputStream&, mc::nbtlist& list);
 
+// Forwarded I/O methods, for easier to comprehend.
+inline McIoInputStream& operator>>(McIoInputStream& inputStream, mc::nbtcompound& compound) {
+	McIoReadNbtCompound(inputStream, compound);
+	return inputStream;
+}
+inline McIoInputStream& operator>>(McIoInputStream& inputStream, mc::nbtlist& list) {
+	McIoReadNbtList(inputStream, list);
+	return inputStream;
+}
+
 // Completely skip up to given elements so that the input stream's read pointer points
 // to the next element.
 void McIoSkipNbtElement(McIoInputStream&, mc::s8 type);
 
 /// The SAX processor action corresponding to strongly typed tag.
-struct McDtNbtCompoundSaxAction {
+struct McIoNbtCompoundSaxAction {
 	/// The type is calculates as follow:
 	/// - When expectedType is between 0 and 12, it refers to the basic nbt types, and 
 	/// for mc::nbtlist, it should accept any list.
@@ -495,6 +506,98 @@ struct McDtNbtCompoundSaxAction {
 	/// The input stream will be still be set to the place of the read tag.
 	/// May be null and will not be invoked if so.
 	void (*tagFailedResolve)(McIoMarkableStream& inputStream, void* data, void* ud);
+	
+	/**
+	 * @brief Initialize the sax result into a member of an instance.
+	 */
+	template<typename memberType, bool mandatory = false>
+	static constexpr McIoNbtCompoundSaxAction forMember() {
+		typedef typename memberType::fieldType fieldType;
+		typedef typename memberType::classType classType;
+		
+		static_assert(mc::nbtinfo.ordinalOf<fieldType>() 
+			!= mc::nbtinfo.ordinalOf<mc::nbtlist>(),
+			"The field type mc::nbtlist is not a common type.");
+		static_assert(mc::nbtinfo.ordinalOf<fieldType>() 
+			!= mc::nbtinfo.ordinalOf<mc::nbtcompound>(),
+			"The field type mc::nbtlist is not a common type.");
+		return { 
+			// Expected to be the ordinal of the field type.
+			.expectedType = mc::nbtinfo.ordinalOf<fieldType>(), 
+			
+			// Copy the result into the place by pointer.
+			.tagPresent = [] (McIoMarkableStream& inputStream, 
+					void* data, void* ud) -> void  {
+
+				// Read into the tag stream.
+				fieldType& memberReference = memberType::dereference(data);
+				inputStream >> memberReference;
+			}, 
+			
+			// Common field of instance should not have any prerequisites.
+			.numPrerequisites = 0, .prerequisites = nullptr,
+			
+			// Depending on whether is mandatory, throw exception or do nothing.
+			.tagAbsent = [] (void* data, void* ud) -> void {
+				if(mandatory) throw std::runtime_error(
+					"The field is mandatory but not found.");
+			},
+			
+			// We don't have to resolve prerequisites, so no more fail resolve.
+			.tagFailedResolve = nullptr 
+		};
+	}
+	
+	/**
+	 * @brief Initialize the sax result into a vector member of an instance, where
+	 * the input type is assumed to be an nbt list, with component type the same
+	 * as the vector's component type.
+	 *
+	 * This is only applicable to member of std::vector<>, and the component type
+	 * must be one from the mc::nbtinfo.
+	 */
+	template<typename memberType, bool mandatory = false>
+	static constexpr McIoNbtCompoundSaxAction forVectorMember() {
+		typedef typename memberType::fieldType::value_type componentType;
+		static_assert(std::is_same<typename memberType::fieldType,
+			std::vector<componentType> >::value, "The specified member must be a vector.");
+		
+		return {
+			// Expected to be the value of component's type.
+			.expectedType = 13 + mc::nbtinfo.ordinalOf<componentType>(),
+			
+			// Copy the result into the place by pointer.
+			.tagPresent = [] (McIoMarkableStream& inputStream,
+					void* data, void* ud) {
+				
+				// Read the length of vector first.
+				mc::s32 vectorLength = 0;
+				inputStream >> vectorLength;
+				if(vectorLength <= 0) return;
+				
+				// Loop reading the content into the field.
+				std::vector<componentType>& vectorField = memberType::dereference(data);
+				vectorField.reserve(vectorLength);
+				for(size_t i = 0; i < vectorLength; ++ i) {
+					componentType componentValue;
+					inputStream >> componentValue;
+					vectorField.push_back(std::move(componentValue));
+				}
+			},
+			
+			// Vector field of instance should (also) not have any prerequisites.
+			.numPrerequisites = 0, .prerequisites = nullptr,
+			
+			// Depending on whether is mandatory, throw exception or do nothing.
+			.tagAbsent = [] (void* data, void* ud) -> void {
+				if(mandatory) throw std::runtime_error(
+					"The vector field is mandatory but not found.");
+			},
+			
+			// We don't have to resolve prerequisites, so no more fail resolve.
+			.tagFailedResolve = nullptr 
+		};
+	}
 };
 
 /// The maximum length of a tag name while being processed in SAX mode, when the 
@@ -537,5 +640,10 @@ static const size_t McIoSaxMaxNbtTagNameLength = 64;
  */
 void McIoSaxNbtCompound(McIoMarkableStream& inputStream, void* data, void* ud,
 	int (*dictionary)(size_t tagLength, const char* tagName),
-	size_t numSaxActions, const McDtNbtCompoundSaxAction* const saxActions,
+	size_t numSaxActions, const McIoNbtCompoundSaxAction* const saxActions,
 	McDtNbtCompound* ignoredTag = nullptr);
+
+// Forward the nbt sax action as mc::nbtsax.
+namespace mc {
+typedef McIoNbtCompoundSaxAction nbtsax;
+} // End of namespace mc.

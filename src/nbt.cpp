@@ -43,9 +43,13 @@ struct McIoNbtTagListItemRead {
 	template<typename V> static inline void perform(
 		McIoInputStream& inputStream, McDtNbtList& list, int listLength) {
 		std::vector<V> listVector;
-		for(size_t i = 0; i < listLength; ++ i) {
-			V data; inputStream >> data;
-			listVector.push_back(data);
+		
+		if(listLength > 0) {
+			listVector.reserve(listLength);
+			for(size_t i = 0; i < listLength; ++ i) {
+				V data; inputStream >> data;
+				listVector.push_back(data);
+			}
 		}
 		mc::nbtlist dataList(listVector);
 		list.swap(dataList);
@@ -57,10 +61,13 @@ template<> inline void
 McIoNbtTagListItemRead::perform<McDtNbtList>(
 	McIoInputStream& inputStream, McDtNbtList& list, int listLength) {
 	std::vector<mc::nbtlist> listVector;
-	for(size_t i = 0; i < listLength; ++ i) {
-		mc::nbtlist sublist; 
-		McIoReadNbtList(inputStream, sublist);
-		listVector.push_back(std::move(sublist));
+	if(listLength > 0) {
+		listVector.reserve(listLength);
+		for(size_t i = 0; i < listLength; ++ i) {
+			mc::nbtlist sublist; 
+			McIoReadNbtList(inputStream, sublist);
+			listVector.push_back(std::move(sublist));
+		}
 	}
 	mc::nbtlist aggregateList(listVector);
 	list.swap(aggregateList);
@@ -71,10 +78,13 @@ template<> inline void
 McIoNbtTagListItemRead::perform<McDtNbtCompound>(
 	McIoInputStream& inputStream, McDtNbtList& list, int listLength) {
 	std::vector<mc::nbtcompound> listVector;
-	for(size_t i = 0; i < listLength; ++ i) {
-		mc::nbtcompound compound;
-		McIoReadNbtCompound(inputStream, compound);
-		listVector.push_back(std::move(compound));
+	if(listLength > 0) {
+		listVector.reserve(listLength);
+		for(size_t i = 0; i < listLength; ++ i) {
+			mc::nbtcompound compound;
+			McIoReadNbtCompound(inputStream, compound);
+			listVector.push_back(std::move(compound));
+		}
 	}
 	mc::nbtlist compoundList(listVector);
 	list.swap(compoundList);
@@ -105,7 +115,7 @@ struct McIoNbtTagItemRead {
 	 * @param[inout] inputStream the target input stream for reading.
 	 * @param[out] payload the union to write read data to.
 	 */
-	template<typename V> static inline  void perform(
+	template<typename V> static inline void perform(
 		McIoInputStream& inputStream, McDtNbtPayload& payload) {
 		V dataObject; inputStream >> dataObject;
 		payload = std::move(dataObject);
@@ -252,7 +262,8 @@ void McIoSkipNbtElement(McIoInputStream& inputStream, mc::s8 tag) {
 // after the name length, and depending on the position, we skip up to 
 // corresponding bytes.
 inline void McIoSaxNbtCompoundPlaceIgnored(McDtNbtCompound* ignoredTag,
-	mc::s8 tagType, size_t nameLength, const char* name, McIoMarkableStream& inputStream) {
+	mc::s8 tagType, size_t nameLength, const char* name, 
+	McIoMarkableStream& inputStream) {
 	
 	// See whether the user structure is present.
 	if(ignoredTag != nullptr) {
@@ -282,7 +293,7 @@ inline void McIoSaxNbtCompoundPlaceIgnored(McDtNbtCompound* ignoredTag,
 
 // Check whether all prerequisites of a sax action has met.
 inline bool McIoSaxActionAllMet(std::vector<bool>& present, 
-		const McDtNbtCompoundSaxAction& saxAction) {
+		const McIoNbtCompoundSaxAction& saxAction) {
 	bool allPrerequisitesMet = true;
 	for(size_t i = 0; i < saxAction.numPrerequisites; ++ i) {
 		if(!present[saxAction.prerequisites[i]])
@@ -294,7 +305,7 @@ inline bool McIoSaxActionAllMet(std::vector<bool>& present,
 // Implementation for McIoSaxNbtCompound().
 void McIoSaxNbtCompound(McIoMarkableStream& inputStream, void* data, void* ud,
 	int (*dictionary)(size_t tagLength, const char* tagName), size_t numSaxActions, 
-	const McDtNbtCompoundSaxAction* const saxActions, McDtNbtCompound* ignoredTag) {
+	const McIoNbtCompoundSaxAction* const saxActions, McDtNbtCompound* ignoredTag) {
 	
 	std::vector<bool> present(numSaxActions);
 	size_t numPresents = 0;
@@ -336,7 +347,7 @@ void McIoSaxNbtCompound(McIoMarkableStream& inputStream, void* data, void* ud,
 		}
 		
 		// Help users to find whether they have initialized the actions correctly.
-		const McDtNbtCompoundSaxAction& saxAction = saxActions[entry];
+		const McIoNbtCompoundSaxAction& saxAction = saxActions[entry];
 		assert(saxAction.expectedType <= 25);
 		
 		// If mismatched (not typed list), also place it outside.
@@ -348,11 +359,17 @@ void McIoSaxNbtCompound(McIoMarkableStream& inputStream, void* data, void* ud,
 		
 		// If mismatched (typed list), also place it outside.
 		if(saxAction.expectedType > 12) {
+			std::unique_ptr<McIoStreamMark> mark;
+			if(ignoredTag != nullptr) mark = inputStream.mark();
+			
 			mc::s8 componentType; inputStream >> componentType;
-			if(componentType + 13 != saxActions[entry].expectedType) {
-				McIoSaxNbtCompoundPlaceIgnored(ignoredTag, 
-					type, tagLength, nameBuffer, inputStream);
-				continue;
+			if(componentType > 0) {	// Except for nbt end could match any type.
+				if(componentType + 12 != saxActions[entry].expectedType) {
+					mark.reset();
+					McIoSaxNbtCompoundPlaceIgnored(ignoredTag, 
+						type, tagLength, nameBuffer, inputStream);
+					continue;
+				}
 			}
 		}
 		
@@ -383,7 +400,7 @@ void McIoSaxNbtCompound(McIoMarkableStream& inputStream, void* data, void* ud,
 		for(size_t pass = 0; pass < maxPass && !marks.empty(); ++ pass) {
 			
 			for(auto iter = marks.begin(); iter != marks.end(); ) {
-				const McDtNbtCompoundSaxAction& saxAction = saxActions[iter -> action];
+				const McIoNbtCompoundSaxAction& saxAction = saxActions[iter -> action];
 				
 				if(McIoSaxActionAllMet(present, saxAction)) {
 					iter -> mark -> reset();
