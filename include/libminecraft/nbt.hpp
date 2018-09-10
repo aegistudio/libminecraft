@@ -598,6 +598,51 @@ struct McIoNbtCompoundSaxAction {
 			.tagFailedResolve = nullptr 
 		};
 	}
+	
+	/**
+	 * @brief Initialize the sax result into a bit field, the field in the 
+	 * compound is always mc::s8, however can be any integral type when in 
+	 * the objects representations.
+	 */
+	template<typename memberType, typename memberType::fieldType mask>
+	static constexpr McIoNbtCompoundSaxAction forBitField() {
+		typedef typename memberType::fieldType bitfieldType;
+		static_assert(std::is_integral<bitfieldType>::value,
+			"The bit field's type should always be an integral.");
+		
+		return {
+			// Expected to be mc::s8.
+			.expectedType = mc::nbtinfo.ordinalOf<mc::s8>(),
+			
+			// Copy the result into the bitfield.
+			.tagPresent = [] (McIoMarkableStream& inputStream,
+					void* data, void* ud) {
+						
+				// Read the tag first.
+				mc::s8 bitValue; inputStream >> bitValue;
+				if(bitValue != 0 && bitValue != 1)
+					throw std::runtime_error("Boolean value can only be 0 or 1.");
+				
+				// Place that into the bit field.
+				bitfieldType& bitfield = memberType::dereference(data);
+				bitfield = bitfield | mask;
+				if(bitValue == 0) bitfield = bitfield ^ mask;
+			},
+			
+			// Bitfield of instance should not have prerequisites.
+			.numPrerequisites = 0, .prerequisites = nullptr,
+			
+			// Bit field is usually not mandatory, and set to 0 if not present.
+			.tagAbsent = [] (void* data, void* ud) -> void {
+				// Clear bit field here.
+				bitfieldType& bitfield = memberType::dereference(data);
+				bitfield = (bitfield | mask) ^ mask;
+			},
+			
+			// We don't have prerequisites here, so do nothing.
+			.tagFailedResolve = nullptr
+		};
+	}
 };
 
 /// The maximum length of a tag name while being processed in SAX mode, when the 
