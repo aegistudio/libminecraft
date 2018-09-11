@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
 # LibMinecraft is a minecraft protocol library based on C++.
-project(libminecraft C CXX)
+project(libminecraft C CXX Gperf)
 
 # Require ZLIB for compressed packet's compression and decompression.
 find_package(ZLIB REQUIRED)
@@ -17,7 +18,7 @@ include_directories(include ${ZLIB_INCLUDE_DIR})
 
 # Configure the library targets.
 set(LIBMC_SRC src/connection.cpp src/writable.cpp src/stream.cpp 
-		src/iobase.cpp src/nbt.cpp)
+		src/iobase.cpp src/nbt.cpp src/chatcolor.gperf)
 if(UNIX AND NOT APPLE)
 list(APPEND LIBMC_SRC src/multiplexer_linux.cpp)
 endif()

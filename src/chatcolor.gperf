@@ -1,0 +1,63 @@
+%{
+#include "libminecraft/chat.hpp"
+#include <cstring>
+%}
+%struct-type
+%language=C++
+%define class-name McDtChatColorPerfectHash
+%readonly-tables
+%null-strings
+struct McDtChatColorHashResult {
+	const char* name;
+	const McDtChatColor* color;
+};
+%%
+black,        &McDtChatColor::colors[0]
+dark_blue,    &McDtChatColor::colors[1]
+dark_green,   &McDtChatColor::colors[2]
+dark_aqua,    &McDtChatColor::colors[3]
+dark_red,     &McDtChatColor::colors[4]
+dark_purple,  &McDtChatColor::colors[5]
+gold,         &McDtChatColor::colors[6]
+gray,         &McDtChatColor::colors[7]
+dark_gray,    &McDtChatColor::colors[8]
+blue,         &McDtChatColor::colors[9]
+green,        &McDtChatColor::colors[10]
+aqua,         &McDtChatColor::colors[11]
+red,          &McDtChatColor::colors[12]
+light_purple, &McDtChatColor::colors[13]
+yellow,       &McDtChatColor::colors[14]
+white,        &McDtChatColor::colors[15]
+reset,        &McDtChatColor::reset
+%%
+// Define the constants in McDtChatColor.
+const McDtChatColor McDtChatColor::colors[16] = {
+	{ "black",        '0', {0, 0, 0},       {0, 0, 0}    },
+	{ "dark_blue",    '1', {0, 0, 170},     {0, 0, 42}   },
+	{ "dark_green",   '2', {0, 170, 0},     {0, 42, 0}   },
+	{ "dark_aqua",    '3', {0, 170, 170},   {0, 42, 42}  },
+	{ "dark_red",     '4', {0, 170, 170},   {0, 42, 42}  },
+	{ "dark_purple",  '5', {170, 0, 170},   {42, 0, 42}  },
+	{ "gold",         '6', {255, 170, 0},   {42, 42, 0}  },
+	{ "gray",         '7', {170, 170, 170}, {42, 42, 42} },
+	{ "dark_gray",    '8', {85, 85, 85},    {21, 21, 21} },
+	{ "blue",         '9', {85, 85, 255},   {21, 21, 63} },
+	{ "green",        'a', {85, 255, 85},   {21, 63, 21} },
+	{ "aqua",         'b', {85, 255, 255},  {21, 63, 63} },
+	{ "red",          'c', {255, 85, 85},   {63, 21, 21} },
+	{ "light_purple", 'd', {255, 85, 255},  {63, 21, 63} },
+	{ "yellow",       'e', {255, 255, 85},  {63, 63, 21} },
+	{ "white",        'f', {255, 255, 255}, {63, 63, 63} }
+};
+const McDtChatColor McDtChatColor::reset = { "reset", 'r' };
+
+// Define the McDtChatColor's lookup function.
+const McDtChatColor* McDtChatColor::lookup(
+		const char* name, size_t length) {
+	
+	const McDtChatColorHashResult* result 
+		= McDtChatColorPerfectHash::in_word_set(name, length);
+	if(result == nullptr || result -> name == nullptr) 
+		return nullptr;
+	else return result -> color;
+}
