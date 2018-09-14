@@ -45,26 +45,214 @@ McIoOutputStream& mc::chat::write(McIoOutputStream& outputStream) const {
 	return outputStream;
 }
 
-// The event work data that is useful under chat click event and chat hover event.
+/// The event work data maintaining action and value for events composing
+/// of action and value, where action determines the type of that field,
+/// and value determines the data of the field.
+/// The reference to corresponding event field must be provided.
+template<typename EventFieldHandler>
 struct McDtChatEventWorkData : public McDtJsonWorkData {
+	typedef typename EventFieldHandler::eventFieldType eventFieldType;
+	typedef typename EventFieldHandler::tokenType tokenType;
+	
 	// Containing the value when it is an utf-8 string.
 	std::string valueString;
 	
 	// Containing the value when it is an integer.
 	uint64_t valueInteger;
 	
+	// The reference to the event field.
+	eventFieldType& eventField;
+	
+	// The stored action token.
+	tokenType storedActionToken;
+	
 	// Track state for the working data, 0 for not specified,
 	// 1 for value string, 2 for value integer.
-	enum valueState {
-		vNone = 0, vString = 1, vInteger = 2
+	enum dataState {
+		vNone = 0, vString = 1, vInteger = 2, 
+		vInitialized = 3, vCompleted = 4
 	};
-	valueState state;
+	dataState state;
 	
 	// Initialize the event work data.
-	McDtChatEventWorkData(): valueString(), valueInteger(0), state(vNone) {}
+	McDtChatEventWorkData(eventFieldType& eventField): 
+		valueString(), valueInteger(0), state(vNone), 
+		eventField(eventField) {}
 	
 	// Destruct the event work data.
 	virtual ~McDtChatEventWorkData() {}
+	
+	// When an action is encountered and the string is parsed.
+	void handleAction(tokenType actionToken) {
+		if(state == vInitialized || state == vCompleted) 
+			throw std::runtime_error("Duplicate action key.");
+		else {
+			// Initialize event object.
+			EventFieldHandler::createEventObject(actionToken, eventField);
+			
+			// Set the internal data and complete the object.
+			if(state != vNone) {
+				assert(state == vString || state == vInteger);
+				if(state == vString) 
+					EventFieldHandler::valueSetString(actionToken, 
+						eventField, valueString.c_str(), valueString.length());
+				else EventFieldHandler::valueSetInteger(
+						actionToken, eventField, valueInteger);
+				state = vCompleted;
+			}
+			
+			// Store the action token and finish it when value is expected.
+			else {
+				state = vInitialized;
+				storedActionToken = actionToken;
+			}
+		}
+	}
+	
+	// When a value is encountered and it is string.
+	void handleValueString(const char* str, size_t len) {
+		if(state != vInitialized && state != vNone) 
+			throw std::runtime_error("Duplicate value.");
+		else if(state == vInitialized) {
+			EventFieldHandler::valueSetString(
+				storedActionToken, eventField, str, len);
+			state = vCompleted;
+		}
+		else {
+			valueString = std::string(str, len);
+			state = vString;
+		}
+	}
+	
+	// When a value is encountered and it is integer.
+	void handleValueInteger(uint64_t value) {
+		if(state != vInitialized && state != vNone)
+			throw std::runtime_error("Duplicate value.");
+		else if(state == vInitialized) {
+			EventFieldHandler::valueSetInteger(
+				storedActionToken, eventField, value);
+			state = vCompleted;
+		}
+		else {
+			valueInteger = value;
+			state = vInteger;
+		}
+	}
+};
+
+// The concrete event handler for hover event.
+struct McDtHoverEventFieldHandler {
+	typedef McDtUnion<McDtChatHoverInfo> eventFieldType;
+	typedef const McDtChatParseToken* tokenType;
+	
+	// Create new hover event object.
+	static void createEventObject(tokenType actionToken, eventFieldType& event) {
+		if(actionToken == nullptr || actionToken -> acceptedContext != cpcHoverAct) 
+				throw std::runtime_error("Unknown hover event action.");
+		switch(actionToken -> tokenKey) {
+			case keyActShowText: {
+				event = McDtChatHoverShowText();
+			} break;
+			case keyActShowItem: {
+				event = McDtChatHoverShowItem();
+			} break;
+			case keyActShowEntity: {
+				event = McDtChatHoverShowEntity();
+			} break;
+			default: assert(false);
+		}
+	}
+	
+	// Handle integer value.
+	static void valueSetInteger(tokenType actionToken, eventFieldType& event, uint64_t value) {
+		throw std::runtime_error("Unexpected integer value.");
+	}
+	
+	// Handle string value.
+	static void valueSetString(tokenType actionToken, eventFieldType& event, 
+			const char* str, size_t len) {
+		if(actionToken == nullptr || actionToken -> acceptedContext != cpcHoverAct) 
+				throw std::runtime_error("Unknown hover event action.");
+		switch(actionToken -> tokenKey) {
+			case keyActShowText: {
+				event.asType<McDtChatHoverShowText>().text = mc::u16str(std::string(str, len));
+			} break;
+			case keyActShowItem: {
+				event.asType<McDtChatHoverShowItem>().item = mc::u16str(std::string(str, len));
+			} break;
+			case keyActShowEntity: {
+				event.asType<McDtChatHoverShowEntity>().entity = mc::u16str(std::string(str, len));
+			} break;
+			default: assert(false);
+		}
+	}
+};
+
+
+// The concrete event handler for click event.
+struct McDtClickEventFieldHandler {
+	typedef McDtUnion<McDtChatClickInfo> eventFieldType;
+	typedef const McDtChatParseToken* tokenType;
+	
+	// Create new hover event object.
+	static void createEventObject(const tokenType actionToken, eventFieldType& event) {
+		if(actionToken == nullptr || actionToken -> acceptedContext != cpcClickAct) 
+				throw std::runtime_error("Unknown click event action.");
+		switch(actionToken -> tokenKey) {
+			case keyActOpenUrl: {
+				event = McDtChatClickOpenUrl();
+			} break;
+			case keyActRunCmd: {
+				event = McDtChatClickRunCommand();
+			} break;
+			case keyActSuggestCmd: {
+				event = McDtChatClickSuggestCommand();
+			} break;
+			case keyActChangePage: {
+				event = McDtChatClickChangePage();
+			} break;
+			default: assert(false);
+		}
+	}
+	
+	// Handle integer value.
+	static void valueSetInteger(const tokenType actionToken, eventFieldType& event, uint64_t value) {
+		if(actionToken == nullptr || actionToken -> acceptedContext != cpcClickAct) 
+				throw std::runtime_error("Unknown click event action.");
+		switch(actionToken -> tokenKey) {
+			case keyActOpenUrl:
+			case keyActRunCmd:
+			case keyActSuggestCmd: {
+				throw std::runtime_error("Must provide string as value.");
+			} break;
+			case keyActChangePage: {
+				event.asType<McDtChatClickChangePage>().pageNo = value;
+			} break;
+			default: assert(false);
+		};
+	}
+	
+	// Handle string value.
+	static void valueSetString(const tokenType actionToken, eventFieldType& event, 
+			const char* str, size_t len) {
+		if(actionToken == nullptr || actionToken -> acceptedContext != cpcClickAct) 
+				throw std::runtime_error("Unknown click event action.");
+		switch(actionToken -> tokenKey) {
+			case keyActOpenUrl: {
+				event.asType<McDtChatClickOpenUrl>().url = mc::u16str(std::string(str, len));
+			} break;
+			case keyActRunCmd: {
+				event.asType<McDtChatClickRunCommand>().command = mc::u16str(std::string(str, len));
+			} break;
+			case keyActSuggestCmd: {
+				event.asType<McDtChatClickSuggestCommand>().command = mc::u16str(std::string(str, len));
+			} break;
+			case keyActChangePage: {
+				throw std::runtime_error("Change page value cannot be string.");
+			} break;
+			default: assert(false);
+		}
+	}
 };
 
 // Implementation for the chat parsing handler.
@@ -84,7 +272,11 @@ public:
 	
 	static void expectedNull(const TokenType*, const McDtJsonParseContext<>&) { assert(false); }
 	
-	static void expectedInteger(const TokenType*, const McDtJsonParseContext<>&, uint64_t) {}
+	static void expectedInteger(const TokenType* tk, const McDtJsonParseContext<>& ctx, uint64_t value) {
+		assert(tk != nullptr && tk -> tokenKey == keyValue && ctx.context == cpcClick);
+		((McDtChatEventWorkData<McDtClickEventFieldHandler>*)
+			ctx.workData.get()) -> handleValueInteger(value);
+	}
 	
 	static void expectedDouble(const TokenType*, const McDtJsonParseContext<>&, double) {	assert(false);	}
 	
@@ -184,6 +376,43 @@ public:
 					toScore(ctx).objective = mc::u16str(std::string(name, length));
 				} break;
 				
+				// The action expected.
+				case keyAction: {
+					assert(ctx.context == cpcHover || ctx.context == cpcClick);
+					
+					// Parse value token.
+					const McDtChatParseToken* valueToken = 
+						McDtChatParseToken::lookup(name, length);
+					
+					// Cast forward action.
+					if(ctx.context == cpcHover) {
+						((McDtChatEventWorkData<McDtHoverEventFieldHandler>*)
+							ctx.workData.get()) -> handleAction(valueToken);
+					}
+					else {
+						((McDtChatEventWorkData<McDtClickEventFieldHandler>*)
+							ctx.workData.get()) -> handleAction(valueToken);
+					}
+				} break;
+				
+				// The value expected.
+				case keyValue: {
+					if(ctx.context == cpcScore) {
+						toScore(ctx).value = mc::u16str(std::string(name, length));
+					}
+					else {
+						assert(ctx.context == cpcHover || ctx.context == cpcClick);
+						if(ctx.context == cpcHover) {
+							((McDtChatEventWorkData<McDtHoverEventFieldHandler>*)
+								ctx.workData.get()) -> handleValueString(name, length);
+						}
+						else {
+							((McDtChatEventWorkData<McDtClickEventFieldHandler>*)
+								ctx.workData.get()) -> handleValueString(name, length);
+						}
+					}
+				} break;
+				
 				default: assert(false);
 			}
 		}
@@ -224,21 +453,22 @@ public:
 			case keyHoverEvent: {
 				octx.context = cpcHover;
 				octx.workObject = ctx.workObject;
-				octx.workData.reset(new McDtChatEventWorkData);
+				octx.workData.reset(new McDtChatEventWorkData
+					<McDtHoverEventFieldHandler>(toCompound(ctx).hoverEvent));
 			} break;
 			
 			// The click event compound.
 			case keyClickEvent: {
 				octx.context = cpcClick;
 				octx.workObject = ctx.workObject;
-				octx.workData.reset(new McDtChatEventWorkData);
+				octx.workData.reset(new McDtChatEventWorkData
+					<McDtClickEventFieldHandler>(toCompound(ctx).clickEvent));
 			} break;
 			
 			// The score compound.
 			case keyScore: {
 				octx.context = cpcScore;
-				auto& compound = toCompound(ctx);
-				compound.content = McDtChatTraitScore();
+				toCompound(ctx).content = McDtChatTraitScore();
 				octx.workObject = ctx.workObject;
 			} break;
 			
@@ -246,7 +476,24 @@ public:
 		}
 	}
 	
-	static void expectedArray(const TokenType*, const McDtJsonParseContext<>&, McDtJsonParseContext<>&) {}
+	static void expectedArray(const TokenType* tk, const McDtJsonParseContext<>& ctx, McDtJsonParseContext<>& octx) {
+		// The array could either be 'with' or 'extra', both are under cpcChatCompound.
+		assert(tk != nullptr && ctx.context == cpcChatCompound);
+		switch(tk -> tokenKey) {
+			case keyExtra: {
+				octx.context = cpcExtra;
+				octx.contextAcceptableType = tCompound;
+				octx.workObject = ctx.workObject;
+			} break;
+			case keyWith: {
+				octx.context = cpcWith;
+				octx.contextAcceptableType = tString;
+				octx.workObject = ctx.workObject;
+			} break;
+			
+			default: assert(false); // Impossible case.
+		}
+	}
 	
 	static const TokenType* lookup(const char* name, size_t length) {
 		return McDtChatParseToken::lookup(name, length);

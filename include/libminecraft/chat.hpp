@@ -78,7 +78,7 @@ struct McDtChatClickRunCommand {
 };
 
 /// @brief The click event to suggest a command (replace chat input line).
-struct McDtChatClickExecuteCommand {
+struct McDtChatClickSuggestCommand {
 	std::u16string command;		///< The command to suggest.
 };
 
@@ -89,7 +89,7 @@ struct McDtChatClickChangePage {
 
 /// @brief Defines the union info for chat click.
 typedef mc::cuinfo<McDtChatClickOpenUrl, McDtChatClickRunCommand,
-	McDtChatClickExecuteCommand, McDtChatClickChangePage> McDtChatClickInfo;
+	McDtChatClickSuggestCommand, McDtChatClickChangePage> McDtChatClickInfo;
 
 /// @brief The hover event to display a text.
 struct McDtChatHoverShowText {

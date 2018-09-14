@@ -22,7 +22,7 @@ insertion,       keyInsertion,     cpcChatCompound,                tString
 color,           keyColor,         cpcChatCompound,                tString
 text,            keyText,          cpcChatCompound,                tString
 translate,       keyTranslate,     cpcChatCompound,                tString
-with,            keyTranslate,     cpcChatCompound,                tArray
+with,            keyWith,          cpcChatCompound,                tArray
 keybind,         keyBind,          cpcChatCompound,                tString
 score,           keyScore,         cpcChatCompound,                tCompound
 name,            keyPlayerName,    cpcScore,                       tString
@@ -31,10 +31,11 @@ hoverEvent,      keyHoverEvent,    cpcChatCompound,                tCompound
 clickEvent,      keyClickEvent,    cpcChatCompound,                tCompound
 action,          keyAction,        cpcHover | cpcClick,            tString
 value,           keyValue,         cpcHover | cpcClick | cpcScore, tString | tInteger
-open_url,        keyActOpenUrl,    cpcHoverAct,                    tUndefined
-run_command,     keyActRunCmd,     cpcHoverAct,                    tUndefined
-suggest_command, keyActSuggestCmd, cpcHoverAct,                    tUndefined
-change_page,     keyActChangePage, cpcHoverAct,                    tUndefined
+open_url,        keyActOpenUrl,    cpcClickAct,                    tUndefined
+run_command,     keyActRunCmd,     cpcClickAct,                    tUndefined
+suggest_command, keyActSuggestCmd, cpcClickAct,                    tUndefined
+change_page,     keyActChangePage, cpcClickAct,                    tUndefined
+show_text,       keyActShowText,   cpcHoverAct,                    tUndefined
 show_item,       keyActShowItem,   cpcHoverAct,                    tUndefined
 show_entity,     keyActShowEntity, cpcHoverAct,                    tUndefined
 %%

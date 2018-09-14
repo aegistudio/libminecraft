@@ -53,7 +53,7 @@ enum McDtChatParseKey {
 	keyPlayerName,
 	keyObjective,
 	
-	// Hover event.
+	// Hover and click event.
 	keyHoverEvent,
 	keyClickEvent,
 	keyAction,
@@ -64,6 +64,7 @@ enum McDtChatParseKey {
 	keyActRunCmd,
 	keyActSuggestCmd,
 	keyActChangePage,
+	keyActShowText,
 	keyActShowItem,
 	keyActShowEntity,
 };

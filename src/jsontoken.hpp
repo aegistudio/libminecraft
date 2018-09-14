@@ -130,7 +130,7 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 	
 	bool Bool(bool b) {
 		if(ignoreCounter > 0) return true;
-		if(!isAcceptedType(tNullable)) {
+		if(!isAcceptedType(tBoolean)) {
 			if(tolerant) return true;
 			std::stringstream errorMsg;
 			errorMsg << "Unexpected json key-value pair: " << 
