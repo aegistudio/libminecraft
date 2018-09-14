@@ -46,8 +46,18 @@ namespace McDtUnionAction {
 	struct defaultConstruct {
 		// Any type to perform construct must possess a default constructor.
 		template<typename U> static inline 
-		typename std::enable_if<std::is_default_constructible<U>::value>::type
+		typename std::enable_if<std::is_default_constructible<U>::value 
+			&& !std::is_nothrow_default_constructible<U>::value>::type
 		perform(bool& valueValid, char* dstBuffer, char* srcBuffer = nullptr) {
+			assert(!valueValid);
+			new (dstBuffer) U();
+			valueValid = true;
+		}
+		
+		// The noexcept variant of current class.
+		template<typename U> static inline 
+		typename std::enable_if<std::is_nothrow_default_constructible<U>::value>::type
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer = nullptr) noexcept {
 			assert(!valueValid);
 			new (dstBuffer) U();
 			valueValid = true;
@@ -58,7 +68,7 @@ namespace McDtUnionAction {
 	struct destruct {
 		// Any type must be destructible, there's no exception.
 		template<typename U> static inline void 
-		perform(bool& valueValid, char* dstBuffer, char* srcBuffer = nullptr) {
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer = nullptr) noexcept {
 			assert(valueValid);
 			((U*)dstBuffer) -> ~U();	
 			valueValid = false;
@@ -94,8 +104,8 @@ namespace McDtUnionAction {
 	struct moveConstruct {
 		// When the object is move constructible, just perform move construction.
 		template<typename U> static inline
-		typename std::enable_if<std::is_move_constructible<U>::value>::type
-		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) {
+		typename std::enable_if<std::is_nothrow_move_constructible<U>::value>::type
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) noexcept {
 			assert(!valueValid);
 			U& movedObject = *reinterpret_cast<U*>(srcBuffer);
 			new (dstBuffer) U(std::move(movedObject));
@@ -105,9 +115,10 @@ namespace McDtUnionAction {
 		// When the object is not move constructible but move assignable, perform 
 		// move assignment instead.
 		template<typename U> static inline 
-		typename std::enable_if<	!std::is_move_constructible<U>::value && 
-									std::is_move_assignable<U>::value	>::type
-		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) {
+		typename std::enable_if<!std::is_nothrow_move_constructible<U>::value && 
+								(std::is_nothrow_move_assignable<U>::value &&
+								std::is_nothrow_default_constructible<U>::value)>::type
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) noexcept {
 			assert(!valueValid);
 			U& movedObject = *reinterpret_cast<U*>(srcBuffer);
 			defaultConstruct::template perform<U>(valueValid, dstBuffer);
@@ -146,8 +157,8 @@ namespace McDtUnionAction {
 	struct moveAssign {
 		// When the object is move constructible, just perform move construction.
 		template<typename U> static inline 
-		typename std::enable_if<std::is_move_assignable<U>::value>::type
-		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) {
+		typename std::enable_if<std::is_nothrow_move_assignable<U>::value>::type
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) noexcept {
 			assert(valueValid);
 			U& movedObject = *reinterpret_cast<U*>(srcBuffer);
 			*((U*)dstBuffer) = std::move(movedObject);
@@ -156,9 +167,9 @@ namespace McDtUnionAction {
 		// When the object is not move assignable but move constructible, perform 
 		// move construction instead.
 		template<typename U> static inline 
-		typename std::enable_if<	!std::is_move_assignable<U>::value && 
-									std::is_copy_constructible<U>::value>::type
-		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) {	
+		typename std::enable_if<	!std::is_nothrow_move_assignable<U>::value && 
+									std::is_nothrow_move_constructible<U>::value>::type
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) noexcept {	
 			assert(valueValid);
 			U& copiedObject = *reinterpret_cast<U*>(srcBuffer);
 			destruct::template perform<U>(valueValid, dstBuffer);
@@ -171,7 +182,7 @@ namespace McDtUnionAction {
 	struct reverseMoveAssign {
 		// Just swap src buffer and dst buffer's location.
 		template<typename U> static inline void
-		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) {
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) noexcept {
 			moveAssign::template perform<U>(valueValid, srcBuffer, dstBuffer);
 		}
 	};
@@ -195,6 +206,12 @@ public:
 			char* dstBuffer, char* srcBuffer) {				
 		// Ordinal must be greater than or equal the max ordinal this case.
 		throw std::runtime_error("Union ordinal value exceeds boundary.");
+	}
+	
+	/// No-except version of the byOrdinal call.
+	template<typename Action>
+	inline static void byOrdinalNoThrow(int32_t ordinal, bool& valueValid,
+			char* dstBuffer, char* srcBuffer) noexcept {				
 	}
 	
 	/// Perform an action associated to the ordinal with the object.
@@ -222,8 +239,9 @@ class McDtUnionInfo<baseOrdinal, T0, T...> {
 					std::is_copy_assignable<T0>::value, 
 			"The specified type must be copy-constructible!");
 	
-	static_assert(	std::is_move_constructible<T0>::value ||
-					std::is_move_assignable<T0>::value, 
+	static_assert(	std::is_nothrow_move_constructible<T0>::value ||
+					(std::is_nothrow_default_constructible<T0>::value
+					&& std::is_nothrow_move_assignable<T0>::value), 
 			"The specified type must be move-constructible!");
 	
 	// Make sure that nullptr is not specified as parameter.
@@ -242,6 +260,17 @@ public:
 		else if(ordinal == baseOrdinal)
 			Action::template perform<T0>(valueValid, dstBuffer, srcBuffer);
 		else next::template byOrdinal<Action>(ordinal, valueValid, dstBuffer, srcBuffer);
+	}
+	
+	// The nothrow version of the byOrdinal call.
+	template<typename Action>
+	inline static void byOrdinalNoThrow(int32_t ordinal, bool& valueValid,
+				char* dstBuffer, char* srcBuffer = nullptr) noexcept {
+		if(ordinal < baseOrdinal) return;
+		else if(ordinal == baseOrdinal)
+			Action::template perform<T0>(valueValid, dstBuffer, srcBuffer);
+		else next::template byOrdinalNoThrow<Action>(
+			ordinal, valueValid, dstBuffer, srcBuffer);
 	}
 
 	// Used by user to specify their own by ordinal actions.
@@ -312,25 +341,25 @@ public:
 	}
 	
 	/// Move constructor for the typed union object.
-	McDtUnion(McDtUnion&& a): type(a.type), valueValid(false) {
+	McDtUnion(McDtUnion&& a) noexcept: type(a.type), valueValid(false) {
 		if(a.valueValid)
-			info.template byOrdinal<McDtUnionAction::moveConstruct>
+			info.template byOrdinalNoThrow<McDtUnionAction::moveConstruct>
 				(type, valueValid, (char*)value, (char*)a.value);
 	}
 	
 	/// Move assignment for the typed union object.
-	McDtUnion& operator=(McDtUnion&& a) {
+	McDtUnion& operator=(McDtUnion&& a)  noexcept {
 		if(valueValid && type == a.type) {
-			info.template byOrdinal<McDtUnionAction::moveAssign>
+			info.template byOrdinalNoThrow<McDtUnionAction::moveAssign>
 					(type, valueValid, (char*)value, (char*)a.value);
 		}
 		else {
 			if(valueValid)
-				info.template byOrdinal<McDtUnionAction::destruct>
+				info.template byOrdinalNoThrow<McDtUnionAction::destruct>
 					(type, valueValid, (char*)value);
 			type = a.type;
 			if(a.valueValid)
-				info.template byOrdinal<McDtUnionAction::moveConstruct>
+				info.template byOrdinalNoThrow<McDtUnionAction::moveConstruct>
 					(type, valueValid, (char*)value, (char*)a.value);
 		}
 	}
@@ -447,22 +476,22 @@ public:
 	/// Assigning a mutable r-value object to the object stored in the union.
 	template<typename V>
 	typename std::enable_if<!std::is_same<std::nullptr_t, V>::value, McDtUnion&>::type
-	operator=(V&& movedValue) {
+	operator=(V&& movedValue) noexcept {
 		char* movedBuffer = (char*)(const_cast<V*>(&movedValue));
 		if(!valueValid) {
-			info.template byOrdinal<McDtUnionAction::moveConstruct>(
+			info.template byOrdinalNoThrow<McDtUnionAction::moveConstruct>(
 				(int32_t)(type = info.template ordinalOf<V>()),
 				valueValid, (char*)value, movedBuffer);
 		}
 		else if(valueValid && type != info.template ordinalOf<V>()) {
-			info.template byOrdinal<McDtUnionAction::destruct>(
+			info.template byOrdinalNoThrow<McDtUnionAction::destruct>(
 				type, valueValid, (char*)value);
-			info.template byOrdinal<McDtUnionAction::moveConstruct>(
+			info.template byOrdinalNoThrow<McDtUnionAction::moveConstruct>(
 				(int32_t)(type = info.template ordinalOf<V>()), 
 				valueValid, (char*)value, movedBuffer);
 		}
 		else {
-			info.template byOrdinal<McDtUnionAction::moveAssign>(type, 
+			info.template byOrdinalNoThrow<McDtUnionAction::moveAssign>(type, 
 				valueValid, (char*)value, movedBuffer);
 		}
 		return *this;

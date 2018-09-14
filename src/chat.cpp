@@ -377,7 +377,7 @@ public:
 					toScore(ctx).name = mc::u16str(std::string(name, length));
 				} break;
 				case keyObjective: {
-					toScore(ctx).objective = mc::u16str(std::string(name, length));
+					toScore(ctx).objective = std::move(mc::ustring<16>(mc::u16str(std::string(name, length))));
 				} break;
 				
 				// The action expected.
@@ -516,8 +516,16 @@ void McIoReadChatCompound(McIoInputStream& inputStream,
 	
 	// Initialize parse related objects.
 	McDtJsonParseDriver<McDtChatParseHandler> driver(std::move(genesis), tolerant);
-	McIoJsonInputStream jinputStream(inputStream, expectedSize);
 	rapidjson::Reader jreader;
+#if 0
+	// Don't force insitu parsing.
+	McIoJsonInputStream jinputStream(inputStream, expectedSize);
+#else
+	// Enforce insitu parsing.
+	std::vector<char> data(expectedSize);
+	inputStream.read(data.data(), expectedSize);
+	rapidjson::GenericInsituStringStream<rapidjson::UTF8<char>> jinputStream(data.data());
+#endif
 	
 	// Fire parse process.
 	if(!jreader.Parse(jinputStream, driver)) 

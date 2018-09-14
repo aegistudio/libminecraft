@@ -65,10 +65,13 @@ public:
 	// Helper for retrieving the internal flavour.
 	typedef McDtFlavour flavour;
 
+	static_assert(std::is_nothrow_move_constructible<T>::value, 
+		"The specified type ought to be no throw move constructible!");
+	
 	// The constructors for the type.
 	McDtDataType(): data() {}
 	McDtDataType(const T& data): data(data) {}
-	McDtDataType(T&& data): data(data) {}
+	McDtDataType(T&& data) noexcept: data(std::move(data)) {}
 	
 	/// The const type casting operator, to extract the internal data.
 	inline operator const T&() const { return data; }
@@ -79,8 +82,8 @@ public:
 	inline McDtDataType& operator=(const McDtDataType<T, U>& a) 
 			{	data = (const T&)a; return *this; }
 	template<typename U>
-	inline McDtDataType& operator=(McDtDataType<T, U>&& a) 
-			{	data = (T&&)a; return *this; }
+	inline McDtDataType& operator=(McDtDataType<T, U>&& a) noexcept
+			{	data = std::move((T&&)a); return *this; }
 	
 	/// The input method that reads data from the input stream.
 	McIoInputStream& read(McIoInputStream&);
@@ -164,6 +167,10 @@ public:
 	McDtDataType(std::u16string&& data): data(std::move(data))
 		{	ensureLengthConstrain();	}
 	
+	McDtDataType(const McDtDataType& a): data(a.data) {}	
+	McDtDataType(McDtDataType& a): data(a.data) {}	
+	McDtDataType(McDtDataType&& a) noexcept: data(std::move(a.data)) {}
+	
 	inline operator const std::u16string&() const { return data; }
 	inline operator std::u16string&&() const { return std::move(data); }
 	
@@ -192,7 +199,7 @@ public:
 	
 	template<typename F> inline typename 
 	std::enable_if<std::is_same<McDtFlavourString<maxLength>, F>::value, McDtDataType&>::type
-	operator=(McDtDataType<std::u16string, F>&& a) { 
+	operator=(McDtDataType<std::u16string, F>&& a) noexcept { 
 		// No check required to perform, directly move assign.
 		data = std::move(a.data); 
 		return *this;
@@ -243,14 +250,14 @@ public:
 	// The specialization functions.
 	McDtDataType(): data() {}
 	McDtDataType(const std::vector<V>& data): data(data) {}
-	McDtDataType(std::vector<V>&& data): data(std::move(data)) {}
+	McDtDataType(std::vector<V>&& data) noexcept: data(std::move(data)) {}
 	inline operator const std::vector<V>&() const { return data; }
 	inline operator std::vector<V>&&() { return std::move(data); }
 	template<typename U>
 	inline McDtDataType& operator=(const McDtDataType<std::vector<V>, U>& a) 
 			{	data = (const std::vector<V>&)a; return *this; }
 	template<typename U>
-	inline McDtDataType& operator=(McDtDataType<std::vector<V>, U>&& a) 
+	inline McDtDataType& operator=(McDtDataType<std::vector<V>, U>&& a) noexcept
 			{	data = (std::vector<V>&&)a; return *this; }
 	
 	// The array operator.

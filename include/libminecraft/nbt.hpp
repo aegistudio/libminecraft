@@ -98,7 +98,7 @@ public:
 	McDtNbtCompound(): entries(new nbtMapType) {}
 	McDtNbtCompound(const McDtNbtCompound& a): 
 			entries(new nbtMapType(*a.entries)) {}
-	McDtNbtCompound(McDtNbtCompound&& a): entries() {
+	McDtNbtCompound(McDtNbtCompound&& a) noexcept: entries() {
 		using std::swap;
 		swap(entries, a.entries);
 	}
@@ -251,7 +251,7 @@ public:
 	
 	// Move status of another nbt list, because the union's object is newed just
 	// on another object's vector, you can safely swap them.
-	McDtNbtList(McDtNbtList&& a): items(), ordinal(a.ordinal), 
+	McDtNbtList(McDtNbtList&& a) noexcept: items(), ordinal(a.ordinal), 
 			m_length(a.m_length), m_capacity(a.m_capacity),
 			stride(a.stride), isTrivial(a.isTrivial) {
 			
@@ -297,7 +297,7 @@ public:
 	}
 	
 	/// Swap with another nbt list.
-	void swap(McDtNbtList& rlist) {
+	void swap(McDtNbtList& rlist) noexcept {
 		using std::swap;
 		swap(items, rlist.items);
 		swap(m_length, rlist.m_length);

@@ -362,7 +362,7 @@ public:
 			++ current;
 			return temp;
 		}
-		else return '\0';
+		else return (peeking = '\0');
 	}
 	
 	/// Tell the current position of the stream.
