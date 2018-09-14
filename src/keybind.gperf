@@ -1,0 +1,94 @@
+%{
+#include "libminecraft/chat.hpp"
+#include <cstring>
+%}
+%struct-type
+%language=C++
+%define class-name McDtChatKeybindPerfectHash
+%readonly-tables
+%null-strings
+struct McDtChatKeybindHashResult {
+	const char* name;
+	const McDtChatTraitKeybind::McDtChatKeybind keybind;
+};
+%%
+key.attack, McDtChatTraitKeybind::kbAttack
+key.use, McDtChatTraitKeybind::kbUse
+key.forward, McDtChatTraitKeybind::kbForward
+key.left, McDtChatTraitKeybind::kbLeft
+key.back, McDtChatTraitKeybind::kbBack
+key.right, McDtChatTraitKeybind::kbRight
+key.jump, McDtChatTraitKeybind::kbJump
+key.sneak, McDtChatTraitKeybind::kbSneak
+key.sprint, McDtChatTraitKeybind::kbSprint
+key.drop, McDtChatTraitKeybind::kbDropItem
+key.inventory, McDtChatTraitKeybind::kbOpenInventory
+key.chat, McDtChatTraitKeybind::kbChat
+key.playerlist, McDtChatTraitKeybind::kbPlayerList
+key.pickItem, McDtChatTraitKeybind::kbPickItem
+key.command, McDtChatTraitKeybind::kbCommand
+key.screenshot, McDtChatTraitKeybind::kbScreenShot
+key.togglePerspective, McDtChatTraitKeybind::kbChangeView
+key.smoothCamera, McDtChatTraitKeybind::kbSmoothCamera
+key.fullscreen, McDtChatTraitKeybind::kbFullScreen
+key.spectatorOutlines, McDtChatTraitKeybind::kbSpectatorOutlines
+key.swapHands, McDtChatTraitKeybind::kbSwapHands
+key.saveToolbarActivator, McDtChatTraitKeybind::kbSaveToolbar
+key.loadToolbarActivator, McDtChatTraitKeybind::kbLoadToolbar
+key.advancements, McDtChatTraitKeybind::kbAdvancement
+key.hotbar.1, McDtChatTraitKeybind::kbHotbar1
+key.hotbar.2, McDtChatTraitKeybind::kbHotbar2
+key.hotbar.3, McDtChatTraitKeybind::kbHotbar3
+key.hotbar.4, McDtChatTraitKeybind::kbHotbar4
+key.hotbar.5, McDtChatTraitKeybind::kbHotbar5
+key.hotbar.6, McDtChatTraitKeybind::kbHotbar6
+key.hotbar.7, McDtChatTraitKeybind::kbHotbar7
+key.hotbar.8, McDtChatTraitKeybind::kbHotbar8
+key.hotbar.9, McDtChatTraitKeybind::kbHotbar9
+%%
+// The list of the key bindings.
+const McDtChatTraitKeybind McDtChatTraitKeybind::keybinds[kbMaxValue] = {
+	{ "key.attack", kbAttack },
+	{ "key.use", kbUse },
+	{ "key.forward", kbForward },
+	{ "key.left", kbLeft },
+	{ "key.back", kbBack },
+	{ "key.right", kbRight },
+	{ "key.jump", kbJump },
+	{ "key.sneak", kbSneak },
+	{ "key.sprint", kbSprint },
+	{ "key.drop", kbDropItem },
+	{ "key.inventory", kbOpenInventory },
+	{ "key.chat", kbChat },
+	{ "key.playerlist", kbPlayerList },
+	{ "key.pickItem", kbPickItem },
+	{ "key.command", kbCommand },
+	{ "key.screenshot", kbScreenShot },
+	{ "key.togglePerspective", kbChangeView },
+	{ "key.smoothCamera", kbSmoothCamera },
+	{ "key.fullscreen", kbFullScreen },
+	{ "key.spectatorOutlines", kbSpectatorOutlines },
+	{ "key.swapHands", kbSwapHands },
+	{ "key.saveToolbarActivator", kbSaveToolbar },
+	{ "key.loadToolbarActivator", kbLoadToolbar },
+	{ "key.advancements", kbAdvancement },
+	{ "key.hotbar.1", kbHotbar1 },
+	{ "key.hotbar.2", kbHotbar2 },
+	{ "key.hotbar.3", kbHotbar3 },
+	{ "key.hotbar.4", kbHotbar4 },
+	{ "key.hotbar.5", kbHotbar5 },
+	{ "key.hotbar.6", kbHotbar6 },
+	{ "key.hotbar.7", kbHotbar7 },
+	{ "key.hotbar.8", kbHotbar8 },
+	{ "key.hotbar.9", kbHotbar9 }
+};
+
+// Define the McDtChatTraitKeybind's lookup function.
+const McDtChatTraitKeybind* McDtChatTraitKeybind::lookup(
+		const char* name, size_t length) {
+	
+	const McDtChatKeybindHashResult* result 
+		= McDtChatKeybindPerfectHash::in_word_set(name, length);
+	if(result == nullptr || result -> name == nullptr) return nullptr;
+	else return &McDtChatTraitKeybind::keybinds[result -> keybind];
+}

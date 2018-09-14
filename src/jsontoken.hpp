@@ -192,7 +192,7 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 			std::stringstream errorMsg;
 			errorMsg << "Unexpected json key-value pair: " << 
 				((currentToken != nullptr)? currentToken -> name : "<?>") 
-				<< d << ".";
+				<< " : " << d << ".";
 			throw std::runtime_error(errorMsg.str());
 		}
 		else {
@@ -233,6 +233,7 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 			ContextType contextToPush;
 			HandlerType::expectedCompound(currentToken, contexts.top(), contextToPush);
 			contexts.push(std::move(contextToPush));
+			currentToken = nullptr;
 			return true;
 		}
 	}
@@ -252,7 +253,7 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 			ContextType contextToPush;
 			HandlerType::expectedArray(currentToken, contexts.top(), contextToPush);
 			contexts.push(std::move(contextToPush));
-			currentToken = nullptr;	// The only type that will not have token.
+			currentToken = nullptr;
 			return true;
 		}
 	}
@@ -260,12 +261,20 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 	/// When the handler driver exits a compound.
 	bool EndObject(rapidjson::SizeType memberCount) {
 		if(ignoreCounter > 0) -- ignoreCounter;
+		else {
+			contexts.pop();
+			currentToken = nullptr;
+		}
 		return true;
 	}
 	
 	/// When the handler driver exits an array.
 	bool EndArray(rapidjson::SizeType elementCount) {
 		if(ignoreCounter > 0) -- ignoreCounter;
+		else {
+			contexts.pop();
+			currentToken = nullptr;
+		}
 		return true;
 	}
 	

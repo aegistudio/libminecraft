@@ -273,9 +273,12 @@ public:
 	static void expectedNull(const TokenType*, const McDtJsonParseContext<>&) { assert(false); }
 	
 	static void expectedInteger(const TokenType* tk, const McDtJsonParseContext<>& ctx, uint64_t value) {
-		assert(tk != nullptr && tk -> tokenKey == keyValue && ctx.context == cpcClick);
-		((McDtChatEventWorkData<McDtClickEventFieldHandler>*)
-			ctx.workData.get()) -> handleValueInteger(value);
+		assert(tk != nullptr && tk -> tokenKey == keyValue);
+		if(ctx.context == cpcClick) {
+			((McDtChatEventWorkData<McDtClickEventFieldHandler>*)
+				ctx.workData.get()) -> handleValueInteger(value);
+		}
+		else throw std::runtime_error("Integer value is not allowed for current context.");
 	}
 	
 	static void expectedDouble(const TokenType*, const McDtJsonParseContext<>&, double) {	assert(false);	}
@@ -364,8 +367,9 @@ public:
 				
 				// The keybind chat trait.
 				case keyBind: {
-					McDtChatTraitKeybind keybind;
-					keybind.key = nullptr /* Translate to keybind please */;
+					const McDtChatTraitKeybind* keybind = McDtChatTraitKeybind::lookup(name, length);
+					if(keybind == nullptr) throw std::runtime_error("Invalid keybind value.");
+					toCompound(ctx).content = keybind;
 				} break;
 				
 				// Translation related to score component.

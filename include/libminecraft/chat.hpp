@@ -52,8 +52,56 @@ struct McDtChatTraitTranslate {
 
 /// @brief The chat component which forwards a keybind.
 struct McDtChatTraitKeybind {
-	const char* key;			///< The name of the key in option.txt, 
+	const char* name;			///< The name of the key in option.txt, 
 								///  generated from gperf's key list.
+
+	// Enumerate all possible keybinds here.
+	enum McDtChatKeybind {
+		kbAttack = 0,
+		kbUse,
+		kbForward,
+		kbLeft,
+		kbBack,
+		kbRight,
+		kbJump,
+		kbSneak,
+		kbSprint,
+		kbDropItem,
+		kbOpenInventory,
+		kbChat,
+		kbPlayerList,
+		kbPickItem,
+		kbCommand,
+		kbScreenShot,
+		kbChangeView,
+		kbSmoothCamera,
+		kbFullScreen,
+		kbSpectatorOutlines,
+		kbSwapHands,
+		kbSaveToolbar,
+		kbLoadToolbar,
+		kbAdvancement,
+		kbHotbar,
+		kbHotbar1 = kbHotbar + 0,
+		kbHotbar2 = kbHotbar + 1,
+		kbHotbar3 = kbHotbar + 2,
+		kbHotbar4 = kbHotbar + 3,
+		kbHotbar5 = kbHotbar + 4,
+		kbHotbar6 = kbHotbar + 5,
+		kbHotbar7 = kbHotbar + 6,
+		kbHotbar8 = kbHotbar + 7,
+		kbHotbar9 = kbHotbar + 8,
+		kbMaxValue	// Cannot be used as index.
+	};
+	
+	/// The value of the keybind ordinal.
+	const McDtChatKeybind keybind;
+	
+	/// The basic chat bindings.
+	static const McDtChatTraitKeybind keybinds[kbMaxValue];
+	
+	/// The lookup function.
+	static const McDtChatTraitKeybind* lookup(const char* name, size_t length);
 };
 
 /// @brief The chat component which forwards an scoreboard item.
@@ -65,7 +113,7 @@ struct McDtChatTraitScore {
 
 /// @brief Defines the union info for chat traits.
 typedef mc::cuinfo<McDtChatTraitText, McDtChatTraitTranslate,
-			McDtChatTraitKeybind, McDtChatTraitScore> McDtChatTraitInfo;
+			const McDtChatTraitKeybind*, McDtChatTraitScore> McDtChatTraitInfo;
 
 /// @brief The click event to open a url.
 struct McDtChatClickOpenUrl {
@@ -204,5 +252,52 @@ constexpr const McDtChatColor* light_purple = &McDtChatColor::colors[13];
 constexpr const McDtChatColor* yellow       = &McDtChatColor::colors[14];
 constexpr const McDtChatColor* white        = &McDtChatColor::colors[15];
 };
+
+namespace chatkeybind {	// Enumerate possible keybinds.
+#ifndef __chatkeybind_constexpr
+#define __chatkeybind_constexpr(name, enumerate)\
+constexpr const McDtChatTraitKeybind* name = \
+&McDtChatTraitKeybind::keybinds[McDtChatTraitKeybind::enumerate];
+
+__chatkeybind_constexpr(attack,            kbAttack)
+__chatkeybind_constexpr(use,               kbUse)
+__chatkeybind_constexpr(forward,           kbForward)
+__chatkeybind_constexpr(left,              kbLeft)
+__chatkeybind_constexpr(back,              kbBack)
+__chatkeybind_constexpr(right,             kbRight)
+__chatkeybind_constexpr(jump,              kbJump)
+__chatkeybind_constexpr(sneak,             kbSneak)
+__chatkeybind_constexpr(sprint,            kbSprint)
+__chatkeybind_constexpr(dropItem,          kbDropItem)
+__chatkeybind_constexpr(openInventory,     kbOpenInventory)
+__chatkeybind_constexpr(chat,              kbChat)
+__chatkeybind_constexpr(playerList,        kbPlayerList)
+__chatkeybind_constexpr(pickItem,          kbPickItem)
+__chatkeybind_constexpr(command,           kbCommand)
+__chatkeybind_constexpr(screenShot,        kbScreenShot)
+__chatkeybind_constexpr(changeView,        kbChangeView)
+__chatkeybind_constexpr(smoothCamera,      kbSmoothCamera)
+__chatkeybind_constexpr(fullscreen,        kbFullScreen)
+__chatkeybind_constexpr(spectatorOutlines, kbSpectatorOutlines)
+__chatkeybind_constexpr(swapHands,         kbSwapHands)
+__chatkeybind_constexpr(saveToolbar,       kbSaveToolbar)
+__chatkeybind_constexpr(loadToolbar,       kbLoadToolbar)
+__chatkeybind_constexpr(advancement,       kbAdvancement)
+__chatkeybind_constexpr(hotbar1,           kbHotbar1)
+__chatkeybind_constexpr(hotbar2,           kbHotbar2)
+__chatkeybind_constexpr(hotbar3,           kbHotbar3)
+__chatkeybind_constexpr(hotbar4,           kbHotbar4)
+__chatkeybind_constexpr(hotbar5,           kbHotbar5)
+__chatkeybind_constexpr(hotbar6,           kbHotbar6)
+__chatkeybind_constexpr(hotbar7,           kbHotbar7)
+__chatkeybind_constexpr(hotbar8,           kbHotbar8)
+__chatkeybind_constexpr(hotbar9,           kbHotbar9)
+
+#undef __chatkeybind_constexpr
+#else
+#error "Expected __chatkeybind_constexpr to be falsely defined."
+#endif
+};
+
 typedef McDtDataType<McDtChatCompound, McDtFlavourChatCompound> chat;
 } // End of namespace mc.
