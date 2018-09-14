@@ -13,12 +13,21 @@ else()
 message(SEND_ERROR "ZLIB is required to be configured for libminecraft.")
 endif()
 
+# Require RapidJson for parsing chat or user provided nbt-json.
+find_package(RapidJson REQUIRED)
+if(${RapidJson_FOUND})
+message("RapidJson_INCLUDE_DIR: ${RapidJson_INCLUDE_DIR}")
+else()
+message(SEND_ERROR "RapidJson is required to be configured for libminecraft.")
+endif()
+
 # Configure the include directories.
-include_directories(include ${ZLIB_INCLUDE_DIR})
+include_directories(include src ${ZLIB_INCLUDE_DIR} ${RapidJson_INCLUDE_DIR})
 
 # Configure the library targets.
 set(LIBMC_SRC src/connection.cpp src/writable.cpp src/stream.cpp 
-		src/iobase.cpp src/nbt.cpp src/chatcolor.gperf)
+		src/iobase.cpp src/nbt.cpp src/chat.cpp
+		src/chattoken.gperf src/chatcolor.gperf)
 if(UNIX AND NOT APPLE)
 list(APPEND LIBMC_SRC src/multiplexer_linux.cpp)
 endif()

@@ -306,13 +306,15 @@ public:
 	
 	/// Copy constructor for the typed union object.
 	McDtUnion(const McDtUnion& a): type(a.type), valueValid(false) {
-		info.template byOrdinal<McDtUnionAction::copyConstruct>
+		if(a.valueValid) 
+			info.template byOrdinal<McDtUnionAction::copyConstruct>
 				(type, valueValid, (char*)value, (char*)a.value);
 	}
 	
 	/// Move constructor for the typed union object.
 	McDtUnion(McDtUnion&& a): type(a.type), valueValid(false) {
-		info.template byOrdinal<McDtUnionAction::moveConstruct>
+		if(a.valueValid)
+			info.template byOrdinal<McDtUnionAction::moveConstruct>
 				(type, valueValid, (char*)value, (char*)a.value);
 	}
 	
@@ -327,7 +329,8 @@ public:
 				info.template byOrdinal<McDtUnionAction::destruct>
 					(type, valueValid, (char*)value);
 			type = a.type;
-			info.template byOrdinal<McDtUnionAction::moveConstruct>
+			if(a.valueValid)
+				info.template byOrdinal<McDtUnionAction::moveConstruct>
 					(type, valueValid, (char*)value, (char*)a.value);
 		}
 	}

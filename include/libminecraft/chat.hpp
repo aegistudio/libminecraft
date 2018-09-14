@@ -22,7 +22,7 @@
  *
  * // Chat Component Traits.
  * chatTrait ::= text chatText | translate key (value)* | 
- *				keybind optionName | score name objective
+ *				keybind optionName | score name objective value
  *
  * // The final chat structure.
  * chatComponent ::= chatTrait modifier (chatComponent)*
@@ -60,6 +60,7 @@ struct McDtChatTraitKeybind {
 struct McDtChatTraitScore {
 	mc::ustring<16> objective;	///< The objective string (Notice the constrain).
 	std::u16string name;		///< The player name, which might be u16string.
+	std::u16string value;		///< The score value of the object.
 };
 
 /// @brief Defines the union info for chat traits.
@@ -148,18 +149,60 @@ struct McDtChatCompound {
 	const McDtChatColor* color;
 	
 	/// The insertion of this component.
-	mc::cunion<mc::cuinfo<std::u16string>> insertion;	
+	mc::cunion<std::u16string> insertion;	
 	
 	/// The content of the text. If set to null "text":"" will be written out.
-	mc::cunion<McDtChatTraitInfo> content;
+	McDtUnion<McDtChatTraitInfo> content;
 	
 	/// The click event of the text.
-	mc::cunion<McDtChatClickInfo> clickEvent;
+	McDtUnion<McDtChatClickInfo> clickEvent;
 	
 	/// The hover event of the text.
-	mc::cunion<McDtChatHoverInfo> hoverEvent;
+	McDtUnion<McDtChatHoverInfo> hoverEvent;
 	
 	/// The siblings of the current chat compond. Siblings will inherit the 
 	/// decoration and colors of their parents. 
 	std::vector<McDtChatCompound> extra;
+	
+	/// Inherit style modifier from another compound.
+	inline void inheritStyle(const McDtChatCompound& parent) {
+		bold = parent.bold;
+		italic = parent.italic;
+		underlined = parent.underlined;
+		strikethrough = parent.strikethrough;
+		obfuscated = parent.obfuscated;
+		color = parent.color;
+	}
 };
+
+// The I/O methods for reading and writing an McDtChatCompound. Please notice 
+// the streams are not number prefixed.
+void McIoReadChatCompound(McIoInputStream& inputStream, McDtChatCompound& compound, 
+			size_t expectedSize, bool tolerant = false);
+void McIoWriteChatCompound(McIoOutputStream& outputStream,
+			const McDtChatCompound& compound);
+
+// Forward namespace definitions for mc::chat and mc::chatcolor.
+class McDtFlavourChatCompound;
+namespace mc {
+namespace chatcolor {	// Enumerate possible chat colors.
+constexpr const McDtChatColor* reset        = &McDtChatColor::reset;
+constexpr const McDtChatColor* black        = &McDtChatColor::colors[0];
+constexpr const McDtChatColor* dark_blue    = &McDtChatColor::colors[1];
+constexpr const McDtChatColor* dark_green   = &McDtChatColor::colors[2];
+constexpr const McDtChatColor* dark_aqua    = &McDtChatColor::colors[3];
+constexpr const McDtChatColor* dark_red     = &McDtChatColor::colors[4];
+constexpr const McDtChatColor* dark_purple  = &McDtChatColor::colors[5];
+constexpr const McDtChatColor* gold         = &McDtChatColor::colors[6];
+constexpr const McDtChatColor* gray         = &McDtChatColor::colors[7];
+constexpr const McDtChatColor* dark_gray    = &McDtChatColor::colors[8];
+constexpr const McDtChatColor* blue         = &McDtChatColor::colors[9];
+constexpr const McDtChatColor* green        = &McDtChatColor::colors[10];
+constexpr const McDtChatColor* aqua         = &McDtChatColor::colors[11];
+constexpr const McDtChatColor* red          = &McDtChatColor::colors[12];
+constexpr const McDtChatColor* light_purple = &McDtChatColor::colors[13];
+constexpr const McDtChatColor* yellow       = &McDtChatColor::colors[14];
+constexpr const McDtChatColor* white        = &McDtChatColor::colors[15];
+};
+typedef McDtDataType<McDtChatCompound, McDtFlavourChatCompound> chat;
+} // End of namespace mc.

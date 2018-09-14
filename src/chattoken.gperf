@@ -1,0 +1,50 @@
+%{
+#include "libminecraft/chat.hpp"
+#include "chattoken.hpp"
+#include <cstring>
+%}
+%struct-type
+%language=C++
+%define class-name McDtChatTokenPerfectHash
+%readonly-tables
+%null-strings
+struct McDtChatParseToken;
+%%
+true,            keyTrue,          cpcBoolean,                     tUndefined
+false,           keyFalse,         cpcBoolean,                     tUndefined
+extra,           keyExtra,         cpcChatCompound,                tArray
+bold,            keyBold,          cpcChatCompound,                tString | tBoolean
+italic,          keyItalic,        cpcChatCompound,                tString | tBoolean
+underlined,      keyUnderlined,    cpcChatCompound,                tString | tBoolean
+strikethrough,   keyStrikeThrough, cpcChatCompound,                tString | tBoolean
+obfuscated,      keyObfuscated,    cpcChatCompound,                tString | tBoolean
+insertion,       keyInsertion,     cpcChatCompound,                tString
+color,           keyColor,         cpcChatCompound,                tString
+text,            keyText,          cpcChatCompound,                tString
+translate,       keyTranslate,     cpcChatCompound,                tString
+with,            keyTranslate,     cpcChatCompound,                tArray
+keybind,         keyBind,          cpcChatCompound,                tString
+score,           keyScore,         cpcChatCompound,                tCompound
+name,            keyPlayerName,    cpcScore,                       tString
+objective,       keyObjective,     cpcScore,                       tString
+hoverEvent,      keyHoverEvent,    cpcChatCompound,                tCompound
+clickEvent,      keyClickEvent,    cpcChatCompound,                tCompound
+action,          keyAction,        cpcHover | cpcClick,            tString
+value,           keyValue,         cpcHover | cpcClick | cpcScore, tString | tInteger
+open_url,        keyActOpenUrl,    cpcHoverAct,                    tUndefined
+run_command,     keyActRunCmd,     cpcHoverAct,                    tUndefined
+suggest_command, keyActSuggestCmd, cpcHoverAct,                    tUndefined
+change_page,     keyActChangePage, cpcHoverAct,                    tUndefined
+show_item,       keyActShowItem,   cpcHoverAct,                    tUndefined
+show_entity,     keyActShowEntity, cpcHoverAct,                    tUndefined
+%%
+// Define the McDtChatParseToken's lookup function.
+const McDtChatParseToken* McDtChatParseToken::lookup(
+		const char* name, size_t length) {
+	
+	const McDtChatParseToken* result 
+		= McDtChatTokenPerfectHash::in_word_set(name, length);
+	if(result == nullptr || result -> name == nullptr) 
+			return nullptr;
+	else return result;
+}
