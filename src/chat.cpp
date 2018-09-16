@@ -266,11 +266,13 @@ struct McDtClickEventFieldHandler {
 /// This avoids performing excessive new operation when it is not essential.
 struct McDtChatCompoundWorkData : public McDtJsonWorkData {
 	typedef std::list<McDtChatCompound> McDtChatCompoundList;
-	bool autoCompact;
+	bool autoCompact, canPerformMerge;
 	McDtChatCompound thisCompound;
 	McDtChatCompoundList* parentCompound;
-	McDtChatCompoundWorkData(bool autoCompact, McDtChatCompoundList* parentCompound): 
-		autoCompact(autoCompact), thisCompound(), parentCompound(parentCompound) {}
+	McDtChatCompoundWorkData(bool autoCompact, bool canPerformMerge, 
+		McDtChatCompoundList* parentCompound): 
+		autoCompact(autoCompact), canPerformMerge(canPerformMerge),
+		thisCompound(), parentCompound(parentCompound) {}
 	virtual ~McDtChatCompoundWorkData() noexcept {}
 	
 	/// The implementation of the exit method.
@@ -302,8 +304,9 @@ struct McDtChatCompoundWorkData : public McDtJsonWorkData {
 		
 		// See whether it should be appended with its parent.
 		if(parentCompound == nullptr) return;
-		
-		// Merge if the content is trivial.
+		if(canPerformMerge) {
+			// Merge if the content is trivial.
+		}
 		
 		// The content is non trivial, should be appended to its parent's tail.
 		parentCompound -> push_back(std::move(thisCompound));
@@ -500,7 +503,8 @@ public:
 				
 				// Add to parent's extra and begin parse of child structure.
 				McDtChatCompoundWorkData* nextWorkData;
-				octx.workData.reset(nextWorkData = new McDtChatCompoundWorkData(autoCompact, compoundList));
+				octx.workData.reset(nextWorkData = new McDtChatCompoundWorkData(
+						autoCompact, ctx.contenxt == cpcWith, compoundList));
 				octx.workObject = &(nextWorkData -> thisCompound);
 			} break;
 		}
