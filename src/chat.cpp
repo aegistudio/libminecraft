@@ -265,10 +265,11 @@ struct McDtClickEventFieldHandler {
 /// it determines this object could be merged with its left side.
 /// This avoids performing excessive new operation when it is not essential.
 struct McDtChatCompoundWorkData : public McDtJsonWorkData {
+	typedef std::list<McDtChatCompound> McDtChatCompoundList;
 	bool autoCompact;
 	McDtChatCompound thisCompound;
-	McDtChatCompound* parentCompound;
-	McDtChatCompoundWorkData(bool autoCompact, McDtChatCompound* parentCompound): 
+	McDtChatCompoundList* parentCompound;
+	McDtChatCompoundWorkData(bool autoCompact, McDtChatCompoundList* parentCompound): 
 		autoCompact(autoCompact), thisCompound(), parentCompound(parentCompound) {}
 	virtual ~McDtChatCompoundWorkData() noexcept {}
 	
@@ -305,7 +306,7 @@ struct McDtChatCompoundWorkData : public McDtJsonWorkData {
 		// Merge if the content is trivial.
 		
 		// The content is non trivial, should be appended to its parent's tail.
-		parentCompound -> extra.push_back(std::move(thisCompound));
+		parentCompound -> push_back(std::move(thisCompound));
 	}
 };
 
@@ -360,129 +361,123 @@ public:
 	static constexpr const char* ambigiousTrait = "Ambigious chat trait encountered.";
 	
 	void expectedString(const TokenType* tk, const McDtJsonParseContext<>& ctx, const char* name, size_t length) {
-		if(tk != nullptr) {
-			// No-previous-content guarantee.
-			switch(tk -> tokenKey) {
-				case keyText:
-				case keyScore:
-				case keyBind: {
-					if(!toCompound(ctx).content.isNull()) 
-						throw std::runtime_error(ambigiousTrait);
-				} break;
-				case keyTranslate: {
-					if((!toCompound(ctx).content.isNull()) && (toCompound(ctx).content.ordinal()
-						!= McDtChatTraitInfo::ordinalOf<McDtChatTraitTranslate>()))
-						throw std::runtime_error(ambigiousTrait);
-				} break;
-				default: break;
-			}
+		assert(tk != nullptr);
+		
+		// No-previous-content guarantee.
+		switch(tk -> tokenKey) {
+			case keyText:
+			case keyScore:
+			case keyBind: {
+				if(!toCompound(ctx).content.isNull()) 
+					throw std::runtime_error(ambigiousTrait);
+			} break;
+			case keyTranslate: {
+				if((!toCompound(ctx).content.isNull()) && (toCompound(ctx).content.ordinal()
+					!= McDtChatTraitInfo::ordinalOf<McDtChatTraitTranslate>()))
+					throw std::runtime_error(ambigiousTrait);
+			} break;
+			default: break;
+		}
+		
+		// Perform the real work here.
+		switch(tk -> tokenKey) {
+			// Text decorations as string.
+			case keyBold:
+			case keyItalic:
+			case keyUnderlined:
+			case keyStrikeThrough:
+			case keyObfuscated: {
+				const McDtChatParseToken* cptk = McDtChatParseToken::lookup(name, length);
+				if(cptk != nullptr && (cptk -> tokenKey == keyTrue)) expectedBool(tk, ctx, true);
+				else if(cptk != nullptr && (cptk -> tokenKey == keyFalse)) expectedBool(tk, ctx, false);
+				else throw std::runtime_error("Invalid value as text decoration, can only be 'true' or 'false'.");
+			} break;
 			
-			// Perform the real work here.
-			switch(tk -> tokenKey) {
-				// Text decorations as string.
-				case keyBold:
-				case keyItalic:
-				case keyUnderlined:
-				case keyStrikeThrough:
-				case keyObfuscated: {
-					const McDtChatParseToken* cptk = McDtChatParseToken::lookup(name, length);
-					if(cptk != nullptr && (cptk -> tokenKey == keyTrue)) expectedBool(tk, ctx, true);
-					else if(cptk != nullptr && (cptk -> tokenKey == keyFalse)) expectedBool(tk, ctx, false);
-					else throw std::runtime_error("Invalid value as text decoration, can only be 'true' or 'false'.");
-				} break;
+			// Text decorations as value.
+			case keyColor: {
+				const McDtChatColor* chatColor = McDtChatColor::lookup(name, length);
+				if(chatColor == nullptr) throw std::runtime_error("Invalid chat color value.");
+				toCompound(ctx).color = chatColor;
+			} break;
+			
+			// The chat insertion.
+			case keyInsertion: {
+				toCompound(ctx).insertion = mc::u16str(std::string(name, length));
+			} break;
+			
+			// The pure text chat trait.
+			case keyText: {
+				McDtChatTraitText text;
+				text.text = mc::u16str(std::string(name, length));
+				toCompound(ctx).content = std::move(text);
+			} break;
+			
+			// The translate chat trait.
+			case keyTranslate: {
+				if(toCompound(ctx).content.isNull()) {
+					McDtChatTraitTranslate translate;
+					translate.translate = std::string(name, length);
+					toCompound(ctx).content = std::move(translate);
+				}
+				else {
+					toCompound(ctx).content.asType<McDtChatTraitTranslate>()
+						.translate = std::string(name, length);
+				}
+			} break;
+			
+			// The keybind chat trait.
+			case keyBind: {
+				const McDtChatTraitKeybind* keybind = McDtChatTraitKeybind::lookup(name, length);
+				if(keybind == nullptr) throw std::runtime_error("Invalid keybind value.");
+				toCompound(ctx).content = keybind;
+			} break;
+			
+			// Translation related to score component.
+			case keyPlayerName: { 
+				toScore(ctx).name = mc::u16str(std::string(name, length));
+			} break;
+			case keyObjective: {
+				toScore(ctx).objective = std::move(mc::ustring<16>(mc::u16str(std::string(name, length))));
+			} break;
+			
+			// The action expected.
+			case keyAction: {
+				assert(ctx.context == cpcHover || ctx.context == cpcClick);
 				
-				// Text decorations as value.
-				case keyColor: {
-					const McDtChatColor* chatColor = McDtChatColor::lookup(name, length);
-					if(chatColor == nullptr) throw std::runtime_error("Invalid chat color value.");
-					toCompound(ctx).color = chatColor;
-				} break;
+				// Parse value token.
+				const McDtChatParseToken* valueToken = 
+					McDtChatParseToken::lookup(name, length);
 				
-				// The chat insertion.
-				case keyInsertion: {
-					toCompound(ctx).insertion = mc::u16str(std::string(name, length));
-				} break;
-				
-				// The pure text chat trait.
-				case keyText: {
-					McDtChatTraitText text;
-					text.text = mc::u16str(std::string(name, length));
-					toCompound(ctx).content = std::move(text);
-				} break;
-				
-				// The translate chat trait.
-				case keyTranslate: {
-					if(toCompound(ctx).content.isNull()) {
-						McDtChatTraitTranslate translate;
-						translate.translate = std::string(name, length);
-						toCompound(ctx).content = std::move(translate);
-					}
-					else {
-						toCompound(ctx).content.asType<McDtChatTraitTranslate>()
-							.translate = std::string(name, length);
-					}
-				} break;
-				
-				// The keybind chat trait.
-				case keyBind: {
-					const McDtChatTraitKeybind* keybind = McDtChatTraitKeybind::lookup(name, length);
-					if(keybind == nullptr) throw std::runtime_error("Invalid keybind value.");
-					toCompound(ctx).content = keybind;
-				} break;
-				
-				// Translation related to score component.
-				case keyPlayerName: { 
-					toScore(ctx).name = mc::u16str(std::string(name, length));
-				} break;
-				case keyObjective: {
-					toScore(ctx).objective = std::move(mc::ustring<16>(mc::u16str(std::string(name, length))));
-				} break;
-				
-				// The action expected.
-				case keyAction: {
+				// Cast forward action.
+				if(ctx.context == cpcHover) {
+					((McDtChatEventWorkData<McDtHoverEventFieldHandler>*)
+						ctx.workData.get()) -> handleAction(valueToken);
+				}
+				else {
+					((McDtChatEventWorkData<McDtClickEventFieldHandler>*)
+						ctx.workData.get()) -> handleAction(valueToken);
+				}
+			} break;
+			
+			// The value expected.
+			case keyValue: {
+				if(ctx.context == cpcScore) {
+					toScore(ctx).value = mc::u16str(std::string(name, length));
+				}
+				else {
 					assert(ctx.context == cpcHover || ctx.context == cpcClick);
-					
-					// Parse value token.
-					const McDtChatParseToken* valueToken = 
-						McDtChatParseToken::lookup(name, length);
-					
-					// Cast forward action.
 					if(ctx.context == cpcHover) {
 						((McDtChatEventWorkData<McDtHoverEventFieldHandler>*)
-							ctx.workData.get()) -> handleAction(valueToken);
+							ctx.workData.get()) -> handleValueString(name, length);
 					}
 					else {
 						((McDtChatEventWorkData<McDtClickEventFieldHandler>*)
-							ctx.workData.get()) -> handleAction(valueToken);
+							ctx.workData.get()) -> handleValueString(name, length);
 					}
-				} break;
-				
-				// The value expected.
-				case keyValue: {
-					if(ctx.context == cpcScore) {
-						toScore(ctx).value = mc::u16str(std::string(name, length));
-					}
-					else {
-						assert(ctx.context == cpcHover || ctx.context == cpcClick);
-						if(ctx.context == cpcHover) {
-							((McDtChatEventWorkData<McDtHoverEventFieldHandler>*)
-								ctx.workData.get()) -> handleValueString(name, length);
-						}
-						else {
-							((McDtChatEventWorkData<McDtClickEventFieldHandler>*)
-								ctx.workData.get()) -> handleValueString(name, length);
-						}
-					}
-				} break;
-				
-				default: assert(false);
-			}
-		}
-		else {
-			// Append to the translate-with list.
-			assert(ctx.context == cpcWith);
-			toCompound(ctx).content.asType<McDtChatTraitTranslate>()
-				.with.push_back(mc::u16str(std::string(name, length)));
+				}
+			} break;
+			
+			default: assert(false);
 		}
 	}
 	
@@ -496,13 +491,16 @@ public:
 			} break;
 			
 			// Encounter the extra compound of the context.
+			case cpcWith:
 			case cpcExtra: {
 				octx.context = cpcChatCompound;
 				auto& compound = toCompound(ctx);
+				std::list<McDtChatCompound>* compoundList = ctx.context == cpcWith? 
+						&(compound.with) : &(compound.extra);
 				
 				// Add to parent's extra and begin parse of child structure.
 				McDtChatCompoundWorkData* nextWorkData;
-				octx.workData.reset(nextWorkData = new McDtChatCompoundWorkData(autoCompact, &compound));
+				octx.workData.reset(nextWorkData = new McDtChatCompoundWorkData(autoCompact, compoundList));
 				octx.workObject = &(nextWorkData -> thisCompound);
 			} break;
 		}
@@ -545,7 +543,7 @@ public:
 			} break;
 			case keyWith: {
 				octx.context = cpcWith;
-				octx.contextAcceptableType = tString;
+				octx.contextAcceptableType = tCompound;
 				octx.workObject = ctx.workObject;
 			} break;
 			
@@ -567,7 +565,7 @@ void McIoReadChatCompound(McIoInputStream& inputStream, McDtChatCompound& compou
 	genesis.context = cpcGenesis;
 	genesis.contextAcceptableType = tCompound;
 	genesis.workObject = &compound;
-	genesis.workData.reset(new McDtChatCompoundWorkData(autoCompact, &compound));
+	genesis.workData.reset(new McDtChatCompoundWorkData(autoCompact, nullptr));
 	
 	// Initialize parse related objects.
 	McDtChatParseHandler handler(autoCompact);

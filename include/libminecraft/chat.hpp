@@ -45,9 +45,9 @@ struct McDtChatTraitText {
 };
 
 /// @brief The chat component whose trait is translate.
+/// The with field is moved to the chat body, for easier size induction in template.
 struct McDtChatTraitTranslate {
-	std::string translate;				///< The translation key from user locale.
-	std::list<std::u16string> with;		///< To content to be placed in.
+	std::string translate;				///< The translation key from user locale.	
 };
 
 /// @brief The chat component which forwards a keybind.
@@ -221,6 +221,9 @@ struct McDtChatCompound {
 	/// implementation of I/O method, extra is designed to be a doubly-linked list.
 	/// (So is the translate's with array).
 	std::list<McDtChatCompound> extra;
+	
+	/// Only useful when chat trait is with, storing the translation data.
+	std::list<McDtChatCompound> with;
 };
 
 // The I/O methods for reading and writing an McDtChatCompound. Please notice 
