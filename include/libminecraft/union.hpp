@@ -186,6 +186,45 @@ namespace McDtUnionAction {
 			moveAssign::template perform<U>(valueValid, srcBuffer, dstBuffer);
 		}
 	};
+	
+	// The swapping action of when two buffer are of same type and both valid.
+	struct swapping {
+		template<typename U> static inline 
+		typename std::enable_if<
+			std::is_nothrow_move_constructible<U>::value &&
+			std::is_nothrow_move_assignable<U>::value		>::type
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) noexcept {
+			using std::swap;
+			U& left = *((U*)dstBuffer);
+			U& right = *((U*)srcBuffer);
+			swap(left, right);
+		}
+		
+		template<typename U> static inline
+		typename std::enable_if<
+			(!std::is_nothrow_move_constructible<U>::value) && 
+			std::is_nothrow_default_constructible<U>::value &&
+			std::is_nothrow_move_assignable<U>::value>::type
+		perform(bool& valueValid, char* dstBuffer, char* srcBuffer) noexcept {
+			U temp;
+			bool tempValid = true;
+			bool leftValid = true;
+			bool rightValid = true;
+			
+			// Move from left to temp. Left is destructed.
+			moveAssign::template perform<U>(tempValid, (char*)&temp, dstBuffer);
+			destruct::template perform<U>(leftValid, dstBuffer);
+			defaultConstruct::template perform<U>(leftValid, dstBuffer);
+							
+			// Move from right to left. Right is destructed, Left is reconstructed.
+			moveAssign::template perform<U>(leftValid, dstBuffer, srcBuffer);
+			destruct::template perform<U>(rightValid, srcBuffer);
+			defaultConstruct::template perform<U>(rightValid, srcBuffer);
+			
+			// Move from temp to right. Temp is detructed after returned.
+			moveAssign::template perform<U>(rightValid, srcBuffer, (char*)temp);
+		}
+	};
 };
  
 /**
@@ -329,7 +368,7 @@ private:
 public:
 	
 	/// Constructor for the typed union object.
-	McDtUnion(): type(0), valueValid(false) {
+	McDtUnion() noexcept: type(0), valueValid(false) {
 		// Don't automatically initialize object.
 	}
 	
@@ -520,6 +559,41 @@ public:
 	/// Still type casting, in the flavour of functor operation.
 	template<typename V> const V& operator()() const { return asType<V>(); }
 	template<typename V> V& operator()() { return asType<V>(); }
+	
+	// Perform swapping with another object.
+	inline void swap(McDtUnion& r) noexcept {
+		McDtUnion& l = *this;
+		// Nothing is required to be done.
+		if(l.isNull() && r.isNull()) return;
+		
+		// Just move construct right value to left and destroy right.
+		else if(l.isNull()) {
+			info.template byOrdinalNoThrow<McDtUnionAction::moveAssign>
+				(r.ordinal(), valueValid, (char*)l.value, (char*)r.value);
+			r = nullptr;
+			assert(r.isNull());
+		}
+		
+		// Invoke the mirror of the swap method.
+		else if(r.isNull()) {
+			// Mirror of this -> swap(McDtUnion&).
+			r.swap(l);
+			assert(isNull());
+		}
+		
+		// Swap the internal content directly.
+		else if(l.ordinal() == r.ordinal()) 
+			info.template byOrdinalNoThrow<McDtUnionAction::swapping>
+				(ordinal(), valueValid, (char*)l.value, (char*)r.value);
+
+		// Use a temporary buffer object for swapping.
+		else {
+			McDtUnion t;	assert(t.isNull());
+			t.swap(l);		assert(l.isNull());
+			l.swap(r);		assert(r.isNull());
+			r.swap(t);		assert(t.isNull());
+		}
+	}
 };
 
 /// Use namespace 'mc' to separate cunion and cuinfo from global namespace.
@@ -532,3 +606,11 @@ namespace mc {
 	template<typename... T>
 	using cunion = McDtUnion<cuinfo<T...> >;
 }; // End of namespace mc.
+
+/// The forwarded std::swap method of the union.
+namespace std {
+	template<typename UnionInfo>
+	inline void swap(McDtUnion<UnionInfo>& l, McDtUnion<UnionInfo>& r) noexcept {
+		l.swap(r);
+	}
+}; // End of namespace std.

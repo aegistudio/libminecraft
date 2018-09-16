@@ -185,13 +185,20 @@ struct McDtChatColor {
 	static const McDtChatColor* lookup(const char* colorName, size_t length);
 };
 
+/// Indicating whether the parent's decoration is override and how was it overriden.
+enum McDtChatDecorationFlag {
+	dcInherit = 0, 		///< When nothing is specified to the decoration.
+	dcEnable = 1, 		///< When true is specified to the decoration.
+	dcDisable = 2		///< When false is specified to the decoration.
+};
+
 /// Making up the final chat compound class.
 struct McDtChatCompound {
-	bool bold : 1;				///< Whether modified by bold decoration.
-	bool italic : 1;			///< Whether modified by italic decoration.
-	bool underlined : 1;		///< Whether modified by underline decoration.
-	bool strikethrough : 1;		///< Whether modified by strike through decoration.
-	bool obfuscated : 1;		///< Whether modified by obfuscated decoration.
+	McDtChatDecorationFlag bold          : 2;	///< Whether modified by bold decoration.
+	McDtChatDecorationFlag italic        : 2;	///< Whether modified by italic decoration.
+	McDtChatDecorationFlag underlined    : 2;	///< Whether modified by underline decoration.
+	McDtChatDecorationFlag strikethrough : 2;	///< Whether modified by strike through decoration.
+	McDtChatDecorationFlag obfuscated    : 2;	///< Whether modified by obfuscated decoration.
 	
 	/// The color of the text. If set to null and no tag will be written out.
 	const McDtChatColor* color;
@@ -214,22 +221,21 @@ struct McDtChatCompound {
 	/// implementation of I/O method, extra is designed to be a doubly-linked list.
 	/// (So is the translate's with array).
 	std::list<McDtChatCompound> extra;
-	
-	/// Inherit style modifier from another compound.
-	inline void inheritStyle(const McDtChatCompound& parent) {
-		bold = parent.bold;
-		italic = parent.italic;
-		underlined = parent.underlined;
-		strikethrough = parent.strikethrough;
-		obfuscated = parent.obfuscated;
-		color = parent.color;
-	}
 };
 
 // The I/O methods for reading and writing an McDtChatCompound. Please notice 
 // the streams are not number prefixed.
+/**
+ * Read the chat compound data from the specified input stream.
+ *
+ * @param[in] inputStream the json input stream.
+ * @param[out] compound the output compound data.
+ * @param[in] expectedSize the size of the json portion in the stream.
+ * @param[in] tolerant whether the parsing mode is tolerants.
+ * @param[in] autoCompact whether performing compact in place is enabled.
+ */
 void McIoReadChatCompound(McIoInputStream& inputStream, McDtChatCompound& compound, 
-			size_t expectedSize, bool tolerant = false);
+			size_t expectedSize, bool tolerant = false, bool autoCompact = true);
 void McIoWriteChatCompound(McIoOutputStream& outputStream,
 			const McDtChatCompound& compound);
 

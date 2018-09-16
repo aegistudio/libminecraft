@@ -69,7 +69,7 @@ struct McDtJsonWorkData {
 	virtual ~McDtJsonWorkData() noexcept {}
 	
 	// Virtual cleanup method when the context will exit.
-	virtual void exit() {}
+	virtual void exit(bool tolerant) {}
 };
 
 /// Abstraction for a currently parse context.
@@ -102,6 +102,9 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 	typedef typename HandlerType::ContextSetType ContextSetType;
 	typedef McDtJsonParseContext<ContextSetType> ContextType;
 	
+	/// The handler object. Please notice that the driver does not manages the handler.
+	HandlerType& handler;
+	
 	/// The stacked contexts.
 	std::stack<ContextType> contexts;
 	
@@ -116,8 +119,9 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 	/// Increase when it is greater than 0 and enter object or array.
 	int ignoreCounter;
 	
-	McDtJsonParseDriver(ContextType&& context, bool tolerant = false): 
-		contexts(), currentToken(nullptr), 
+	McDtJsonParseDriver(ContextType&& context, 
+		HandlerType& handler, bool tolerant = false): 
+		handler(handler), contexts(), currentToken(nullptr), 
 		tolerant(tolerant), ignoreCounter(0) {
 			contexts.push(std::move(context));
 		}
@@ -142,7 +146,7 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 			throw std::runtime_error(errorMsg.str());
 		}
 		else {
-			HandlerType::expectedBool(currentToken, contexts.top(), b);
+			handler.expectedBool(currentToken, contexts.top(), b);
 			return true;
 		}
 	}
@@ -159,7 +163,7 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 			throw std::runtime_error(errorMsg.str());
 		}
 		else {
-			HandlerType::expectedNull(currentToken, contexts.top());
+			handler.expectedNull(currentToken, contexts.top());
 			return true;
 		}
 	}
@@ -176,7 +180,7 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 			throw std::runtime_error(errorMsg.str());
 		}
 		else {
-			HandlerType::expectedInteger(currentToken, contexts.top(), intValue);
+			handler.expectedInteger(currentToken, contexts.top(), intValue);
 			return true;
 		}
 	}
@@ -199,7 +203,7 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 			throw std::runtime_error(errorMsg.str());
 		}
 		else {
-			HandlerType::expectedDouble(currentToken, contexts.top(), d);
+			handler.expectedDouble(currentToken, contexts.top(), d);
 			return true;
 		}
 	}
@@ -216,7 +220,7 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 			throw std::runtime_error(errorMsg.str());
 		}
 		else {
-			HandlerType::expectedString(currentToken, contexts.top(), str, length);
+			handler.expectedString(currentToken, contexts.top(), str, length);
 			return true;
 		}
 	}
@@ -234,7 +238,7 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 		}
 		else {
 			ContextType contextToPush;
-			HandlerType::expectedCompound(currentToken, contexts.top(), contextToPush);
+			handler.expectedCompound(currentToken, contexts.top(), contextToPush);
 			contexts.push(std::move(contextToPush));
 			currentToken = nullptr;
 			return true;
@@ -254,7 +258,7 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 		}
 		else {
 			ContextType contextToPush;
-			HandlerType::expectedArray(currentToken, contexts.top(), contextToPush);
+			handler.expectedArray(currentToken, contexts.top(), contextToPush);
 			contexts.push(std::move(contextToPush));
 			currentToken = nullptr;
 			return true;
@@ -266,7 +270,7 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 		if(ignoreCounter > 0) -- ignoreCounter;
 		else {
 			if(contexts.top().workData.get() != nullptr)
-				contexts.top().workData -> exit();
+				contexts.top().workData -> exit(tolerant);
 			contexts.pop();
 			currentToken = nullptr;
 		}
@@ -278,7 +282,7 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 		if(ignoreCounter > 0) -- ignoreCounter;
 		else {
 			if(contexts.top().workData.get() != nullptr)
-				contexts.top().workData -> exit();
+				contexts.top().workData -> exit(tolerant);
 			contexts.pop();
 			currentToken = nullptr;
 		}
@@ -290,7 +294,7 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 		if(ignoreCounter > 0) return true;
 		
 		// Perform token lookup.
-		currentToken = HandlerType::lookup(str, length);
+		currentToken = handler.lookup(str, length);
 		if(currentToken != nullptr && 
 			(currentToken -> acceptedContext & contexts.top().context) == 0)
 			currentToken = nullptr;
@@ -317,21 +321,21 @@ class /*concept*/ __ConceptHandlerType {
 public:
 	typedef int TokenType;
 	
-	static void expectedNull(const TokenType*, const McDtJsonParseContext<>&) {}
+	void expectedNull(const TokenType*, const McDtJsonParseContext<>&) {}
 	
-	static void expectedBool(const TokenType*, const McDtJsonParseContext<>&, bool) {}
+	void expectedBool(const TokenType*, const McDtJsonParseContext<>&, bool) {}
 	
-	static void expectedInteger(const TokenType*, const McDtJsonParseContext<>&, uint64_t) {}
+	void expectedInteger(const TokenType*, const McDtJsonParseContext<>&, uint64_t) {}
 	
-	static void expectedDouble(const TokenType*, const McDtJsonParseContext<>&, double) {}
+	void expectedDouble(const TokenType*, const McDtJsonParseContext<>&, double) {}
 	
-	static void expectedString(const TokenType*, const McDtJsonParseContext<>&, const char*, size_t) {}
+	void expectedString(const TokenType*, const McDtJsonParseContext<>&, const char*, size_t) {}
 	
-	static void expectedCompound(const TokenType*, const McDtJsonParseContext<>&, McDtJsonParseContext<>&) {}
+	void expectedCompound(const TokenType*, const McDtJsonParseContext<>&, McDtJsonParseContext<>&) {}
 	
-	static void expectedArray(const TokenType*, const McDtJsonParseContext<>&, McDtJsonParseContext<>&) {}
+	void expectedArray(const TokenType*, const McDtJsonParseContext<>&, McDtJsonParseContext<>&) {}
 	
-	static const TokenType* lookup(const char*, size_t) { return nullptr; }
+	const TokenType* lookup(const char*, size_t) { return nullptr; }
 };
 
 /// Abstraction for input stream adapting (for rapidjson).

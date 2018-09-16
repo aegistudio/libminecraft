@@ -80,7 +80,7 @@ struct McDtChatEventWorkData : public McDtJsonWorkData {
 		eventField(eventField) {}
 	
 	// Destruct the event work data.
-	virtual ~McDtChatEventWorkData() {}
+	virtual ~McDtChatEventWorkData() noexcept {}
 	
 	// When an action is encountered and the string is parsed.
 	void handleAction(tokenType actionToken) {
@@ -137,6 +137,12 @@ struct McDtChatEventWorkData : public McDtJsonWorkData {
 			valueInteger = value;
 			state = vInteger;
 		}
+	}
+	
+	// Verify that either action or value must be set.
+	virtual void exit(bool tolerant) /* may throw exception */ {
+		if(!tolerant && state != vInitialized) 
+			throw std::runtime_error("Imcomplete chat event object.");
 	}
 };
 
@@ -255,12 +261,64 @@ struct McDtClickEventFieldHandler {
 	}
 };
 
+/// The work data used in the extra compound. It manages the compound data, and perform merging when 
+/// it determines this object could be merged with its left side.
+/// This avoids performing excessive new operation when it is not essential.
+struct McDtChatCompoundWorkData : public McDtJsonWorkData {
+	bool autoCompact;
+	McDtChatCompound thisCompound;
+	McDtChatCompound* parentCompound;
+	McDtChatCompoundWorkData(bool autoCompact, McDtChatCompound* parentCompound): 
+		autoCompact(autoCompact), thisCompound(), parentCompound(parentCompound) {}
+	virtual ~McDtChatCompoundWorkData() noexcept {}
+	
+	/// The implementation of the exit method.
+	virtual void exit(bool tolerant) {
+		// Make sure there's content in this compound.
+		if(thisCompound.content.isNull()) {
+			if(tolerant) return;	// Do nothing in such case.
+			else throw std::runtime_error("Invalid chat compound: without chat content.");
+		}
+		
+		// Ensure that the content are valid for different type traits.
+		switch(thisCompound.content.ordinal()) {
+			case McDtChatTraitInfo::ordinalOf<McDtChatTraitTranslate>(): {
+				if(thisCompound.content.asType<McDtChatTraitTranslate>().translate.length() == 0)
+					if(tolerant) return;
+					else throw std::runtime_error("Invalid chat compound: translation key not specified.");
+			} break;
+			
+			case McDtChatTraitInfo::ordinalOf<McDtChatTraitScore>(): {
+				McDtChatTraitScore& score = (McDtChatTraitScore&)thisCompound.content;
+				if(	((std::u16string&)score.objective).length() == 0 ||
+					score.name.length() == 0 || score.value.length() == 0)
+					if(tolerant) return;
+					else throw std::runtime_error("Invalid chat compound: incomplete score component.");
+			} break;
+			
+			default: break;
+		}
+		
+		// See whether it should be appended with its parent.
+		if(parentCompound == nullptr) return;
+		
+		// Merge if the content is trivial.
+		
+		// The content is non trivial, should be appended to its parent's tail.
+		parentCompound -> extra.push_back(std::move(thisCompound));
+	}
+};
+
 // Implementation for the chat parsing handler.
 class McDtChatParseHandler {
 public:
 	typedef McDtChatParseToken TokenType;
 	
 	typedef unsigned short ContextSetType;
+	
+	bool autoCompact;
+	
+	McDtChatParseHandler(bool autoCompact): autoCompact(autoCompact) {};
 	
 	static inline McDtChatCompound& toCompound(const McDtJsonParseContext<>& ctx) {
 		return *((McDtChatCompound*)ctx.workObject);
@@ -270,9 +328,9 @@ public:
 		return toCompound(ctx).content.asType<McDtChatTraitScore>();
 	}
 	
-	static void expectedNull(const TokenType*, const McDtJsonParseContext<>&) { assert(false); }
+	void expectedNull(const TokenType*, const McDtJsonParseContext<>&) { assert(false); }
 	
-	static void expectedInteger(const TokenType* tk, const McDtJsonParseContext<>& ctx, uint64_t value) {
+	void expectedInteger(const TokenType* tk, const McDtJsonParseContext<>& ctx, uint64_t value) {
 		assert(tk != nullptr && tk -> tokenKey == keyValue);
 		if(ctx.context == cpcClick) {
 			((McDtChatEventWorkData<McDtClickEventFieldHandler>*)
@@ -281,27 +339,27 @@ public:
 		else throw std::runtime_error("Integer value is not allowed for current context.");
 	}
 	
-	static void expectedDouble(const TokenType*, const McDtJsonParseContext<>&, double) {	assert(false);	}
+	void expectedDouble(const TokenType*, const McDtJsonParseContext<>&, double) {	assert(false);	}
 	
-	static void expectedBool(const TokenType* tk, const McDtJsonParseContext<>& ctx, bool b) {
+	void expectedBool(const TokenType* tk, const McDtJsonParseContext<>& ctx, bool b) {
 		assert(tk != nullptr);
 		assert(ctx.context == cpcChatCompound);
 		auto& compound = toCompound(ctx);
 		
 		// Forward to decoration keys.
 		switch(tk -> tokenKey) {
-			case keyBold: { compound.bold = b; } break;
-			case keyItalic: { compound.italic = b; } break;
-			case keyUnderlined: { compound.underlined = b; } break;
-			case keyStrikeThrough: { compound.strikethrough = b; } break;
-			case keyObfuscated: { compound.obfuscated = b; } break;
+			case keyBold: { compound.bold = b? dcEnable : dcDisable; } break;
+			case keyItalic: { compound.italic = b? dcEnable : dcDisable; } break;
+			case keyUnderlined: { compound.underlined = b? dcEnable : dcDisable; } break;
+			case keyStrikeThrough: { compound.strikethrough = b? dcEnable : dcDisable; } break;
+			case keyObfuscated: { compound.obfuscated = b? dcEnable : dcDisable; } break;
 			default: assert(false);
 		};
 	}
 	
 	static constexpr const char* ambigiousTrait = "Ambigious chat trait encountered.";
 	
-	static void expectedString(const TokenType* tk, const McDtJsonParseContext<>& ctx, const char* name, size_t length) {
+	void expectedString(const TokenType* tk, const McDtJsonParseContext<>& ctx, const char* name, size_t length) {
 		if(tk != nullptr) {
 			// No-previous-content guarantee.
 			switch(tk -> tokenKey) {
@@ -428,7 +486,7 @@ public:
 		}
 	}
 	
-	static void expectedCompound(const TokenType* tk, const McDtJsonParseContext<>& ctx, McDtJsonParseContext<>& octx) {
+	void expectedCompound(const TokenType* tk, const McDtJsonParseContext<>& ctx, McDtJsonParseContext<>& octx) {
 		// Judge whether it is genesis state now.
 		if(tk == nullptr) switch(ctx.context) {
 			// Right into the text compound parse.
@@ -440,15 +498,12 @@ public:
 			// Encounter the extra compound of the context.
 			case cpcExtra: {
 				octx.context = cpcChatCompound;
-				auto& compound = toCompound(ctx);\
-				
-				// Inherit data from old compound.
-				McDtChatCompound newCompound;
-				newCompound.inheritStyle(compound);
+				auto& compound = toCompound(ctx);
 				
 				// Add to parent's extra and begin parse of child structure.
-				compound.extra.push_back(std::move(newCompound));
-				octx.workObject = (McDtChatCompound*)(&(*compound.extra.rbegin()));
+				McDtChatCompoundWorkData* nextWorkData;
+				octx.workData.reset(nextWorkData = new McDtChatCompoundWorkData(autoCompact, &compound));
+				octx.workObject = &(nextWorkData -> thisCompound);
 			} break;
 		}
 		else switch(tk -> tokenKey) {
@@ -479,7 +534,7 @@ public:
 		}
 	}
 	
-	static void expectedArray(const TokenType* tk, const McDtJsonParseContext<>& ctx, McDtJsonParseContext<>& octx) {
+	void expectedArray(const TokenType* tk, const McDtJsonParseContext<>& ctx, McDtJsonParseContext<>& octx) {
 		// The array could either be 'with' or 'extra', both are under cpcChatCompound.
 		assert(tk != nullptr && ctx.context == cpcChatCompound);
 		switch(tk -> tokenKey) {
@@ -498,23 +553,25 @@ public:
 		}
 	}
 	
-	static const TokenType* lookup(const char* name, size_t length) {
+	const TokenType* lookup(const char* name, size_t length) {
 		return McDtChatParseToken::lookup(name, length);
 	}
 };
 
 // Implementation for the chat parsing method.
-void McIoReadChatCompound(McIoInputStream& inputStream, 
-	McDtChatCompound& compound, size_t expectedSize, bool tolerant) {
+void McIoReadChatCompound(McIoInputStream& inputStream, McDtChatCompound& compound, 
+	size_t expectedSize, bool tolerant, bool autoCompact) {
 	
 	// Push the genesis state into the driver stack.
 	McDtJsonParseContext<> genesis;
 	genesis.context = cpcGenesis;
 	genesis.contextAcceptableType = tCompound;
 	genesis.workObject = &compound;
+	genesis.workData.reset(new McDtChatCompoundWorkData(autoCompact, &compound));
 	
 	// Initialize parse related objects.
-	McDtJsonParseDriver<McDtChatParseHandler> driver(std::move(genesis), tolerant);
+	McDtChatParseHandler handler(autoCompact);
+	McDtJsonParseDriver<McDtChatParseHandler> driver(std::move(genesis), handler, tolerant);
 	rapidjson::Reader jreader;
 #if 0
 	// Don't force insitu parsing.
