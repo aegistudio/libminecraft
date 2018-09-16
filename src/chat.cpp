@@ -440,8 +440,7 @@ public:
 			// Encounter the extra compound of the context.
 			case cpcExtra: {
 				octx.context = cpcChatCompound;
-				auto& compound = toCompound(ctx);
-				size_t lastIdx = compound.extra.size();
+				auto& compound = toCompound(ctx);\
 				
 				// Inherit data from old compound.
 				McDtChatCompound newCompound;
@@ -449,7 +448,7 @@ public:
 				
 				// Add to parent's extra and begin parse of child structure.
 				compound.extra.push_back(std::move(newCompound));
-				octx.workObject = (McDtChatCompound*)(&compound.extra[lastIdx]);
+				octx.workObject = (McDtChatCompound*)(&(*compound.extra.rbegin()));
 			} break;
 		}
 		else switch(tk -> tokenKey) {

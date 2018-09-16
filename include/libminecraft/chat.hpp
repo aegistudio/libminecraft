@@ -35,7 +35,7 @@
  * with length constrains, mc::ustring<maxLength> will be used).
  */
 #include <string>
-#include <vector>
+#include <list>
 #include "libminecraft/union.hpp"
 #include "libminecraft/iobase.hpp"
 
@@ -47,7 +47,7 @@ struct McDtChatTraitText {
 /// @brief The chat component whose trait is translate.
 struct McDtChatTraitTranslate {
 	std::string translate;				///< The translation key from user locale.
-	std::vector<std::u16string> with;	///< To content to be placed in.
+	std::list<std::u16string> with;		///< To content to be placed in.
 };
 
 /// @brief The chat component which forwards a keybind.
@@ -210,7 +210,10 @@ struct McDtChatCompound {
 	
 	/// The siblings of the current chat compond. Siblings will inherit the 
 	/// decoration and colors of their parents. 
-	std::vector<McDtChatCompound> extra;
+	/// The size of extra is always unknown while serializing, so for efficiently
+	/// implementation of I/O method, extra is designed to be a doubly-linked list.
+	/// (So is the translate's with array).
+	std::list<McDtChatCompound> extra;
 	
 	/// Inherit style modifier from another compound.
 	inline void inheritStyle(const McDtChatCompound& parent) {

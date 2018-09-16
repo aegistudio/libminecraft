@@ -66,7 +66,10 @@ enum McDtJsonType {
 /// Abstraction for the working data, which is managed by the handler.
 struct McDtJsonWorkData { 
 	/// Virtual destructor is mandatory for such situation.
-	virtual ~McDtJsonWorkData() {}
+	virtual ~McDtJsonWorkData() noexcept {}
+	
+	// Virtual cleanup method when the context will exit.
+	virtual void exit() {}
 };
 
 /// Abstraction for a currently parse context.
@@ -262,6 +265,8 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 	bool EndObject(rapidjson::SizeType memberCount) {
 		if(ignoreCounter > 0) -- ignoreCounter;
 		else {
+			if(contexts.top().workData.get() != nullptr)
+				contexts.top().workData -> exit();
 			contexts.pop();
 			currentToken = nullptr;
 		}
@@ -272,6 +277,8 @@ struct McDtJsonParseDriver : public rapidjson::BaseReaderHandler<
 	bool EndArray(rapidjson::SizeType elementCount) {
 		if(ignoreCounter > 0) -- ignoreCounter;
 		else {
+			if(contexts.top().workData.get() != nullptr)
+				contexts.top().workData -> exit();
 			contexts.pop();
 			currentToken = nullptr;
 		}
