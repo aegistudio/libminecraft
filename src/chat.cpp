@@ -141,8 +141,8 @@ struct McDtChatEventWorkData : public McDtJsonWorkData {
 	
 	// Verify that either action or value must be set.
 	virtual void exit(bool tolerant) /* may throw exception */ {
-		if(!tolerant && state != vInitialized) 
-			throw std::runtime_error("Imcomplete chat event object.");
+		if(!tolerant && state != vCompleted) 
+			throw std::runtime_error("Incomplete chat event object.");
 	}
 };
 
