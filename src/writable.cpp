@@ -210,7 +210,12 @@ struct McIoWritableControl {
 				switch(queue.front().type) {
 					// The underlying type is write().
 					case wrnodeWrite: {
-					shouldBreak = typedHandleWrite<McIoWritableWriteNode>();
+						shouldBreak = typedHandleWrite<McIoWritableWriteNode>();
+					} break;
+					
+					// The underlying type is sendfile64().
+					case wrnodeSendfile64: {
+						shouldBreak = typedHandleWrite<McIoWritableSendfile64Node>();
 					} break;
 					
 					// Unknown or unimplemened type.
