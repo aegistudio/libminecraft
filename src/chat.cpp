@@ -504,7 +504,7 @@ public:
 				// Add to parent's extra and begin parse of child structure.
 				McDtChatCompoundWorkData* nextWorkData;
 				octx.workData.reset(nextWorkData = new McDtChatCompoundWorkData(
-						autoCompact, ctx.contenxt == cpcWith, compoundList));
+						autoCompact, ctx.context == cpcWith, compoundList));
 				octx.workObject = &(nextWorkData -> thisCompound);
 			} break;
 		}
@@ -569,7 +569,7 @@ void McIoReadChatCompound(McIoInputStream& inputStream, McDtChatCompound& compou
 	genesis.context = cpcGenesis;
 	genesis.contextAcceptableType = tCompound;
 	genesis.workObject = &compound;
-	genesis.workData.reset(new McDtChatCompoundWorkData(autoCompact, nullptr));
+	genesis.workData.reset(new McDtChatCompoundWorkData(autoCompact, true, nullptr));
 	
 	// Initialize parse related objects.
 	McDtChatParseHandler handler(autoCompact);

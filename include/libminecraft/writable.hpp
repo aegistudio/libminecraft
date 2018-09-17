@@ -79,8 +79,23 @@ public:
 	void write(const std::shared_ptr<char>& buffer, 
 			size_t offset, size_t length);
 	
+	/**
+	 * @brief Send a file described by the descriptor.
+	 *
+	 * This method encapsulate the linux's sendfile64() or the winapi's
+	 * TransmitFile(), to minimize copy between buffers (aka. zero copy).
+	 *
+	 * Please notice that the file is always managed by the application 
+	 * (open() and close(), etc). 
+	 *
+	 * @param[in] sendfd the file descriptor to send.
+	 * @param[in] offset offset of the file to send.
+	 * @param[in] size the size of the file to send.
+	 */
+	void sendfile(int sendfd, ssize_t offset, size_t size);
+	
 	/// The control block size of the underlying data.
-	static const size_t writableControlBlockSize = 50;
+	static const size_t writableControlBlockSize = 260;
 private:
 	/// The pimpl-style control field.
 	char control[writableControlBlockSize];
