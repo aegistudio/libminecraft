@@ -246,23 +246,31 @@ void McIoWriteChatCompound(McIoOutputStream& outputStream,
 class McDtFlavourChatCompound;
 namespace mc {
 namespace chatcolor {	// Enumerate possible chat colors.
-constexpr const McDtChatColor* reset        = &McDtChatColor::reset;
-constexpr const McDtChatColor* black        = &McDtChatColor::colors[0];
-constexpr const McDtChatColor* dark_blue    = &McDtChatColor::colors[1];
-constexpr const McDtChatColor* dark_green   = &McDtChatColor::colors[2];
-constexpr const McDtChatColor* dark_aqua    = &McDtChatColor::colors[3];
-constexpr const McDtChatColor* dark_red     = &McDtChatColor::colors[4];
-constexpr const McDtChatColor* dark_purple  = &McDtChatColor::colors[5];
-constexpr const McDtChatColor* gold         = &McDtChatColor::colors[6];
-constexpr const McDtChatColor* gray         = &McDtChatColor::colors[7];
-constexpr const McDtChatColor* dark_gray    = &McDtChatColor::colors[8];
-constexpr const McDtChatColor* blue         = &McDtChatColor::colors[9];
-constexpr const McDtChatColor* green        = &McDtChatColor::colors[10];
-constexpr const McDtChatColor* aqua         = &McDtChatColor::colors[11];
-constexpr const McDtChatColor* red          = &McDtChatColor::colors[12];
-constexpr const McDtChatColor* light_purple = &McDtChatColor::colors[13];
-constexpr const McDtChatColor* yellow       = &McDtChatColor::colors[14];
-constexpr const McDtChatColor* white        = &McDtChatColor::colors[15];
+constexpr const McDtChatColor* reset = &McDtChatColor::reset;
+#ifndef __chatcolor_constexpr
+#define __chatcolor_constexpr(name, index)\
+constexpr const McDtChatColor* name = &McDtChatColor::colors[index];
+
+__chatcolor_constexpr(black,        0)
+__chatcolor_constexpr(dark_blue,    1)
+__chatcolor_constexpr(dark_green,   2)
+__chatcolor_constexpr(dark_aqua,    3)
+__chatcolor_constexpr(dark_red,     4)
+__chatcolor_constexpr(dark_purple,  5)
+__chatcolor_constexpr(gold,         6)
+__chatcolor_constexpr(gray,         7)
+__chatcolor_constexpr(dark_gray,    8)
+__chatcolor_constexpr(blue,         9)
+__chatcolor_constexpr(green,        10)
+__chatcolor_constexpr(aqua,         11)
+__chatcolor_constexpr(red,          12)
+__chatcolor_constexpr(light_purple, 13)
+__chatcolor_constexpr(yellow,       14)
+__chatcolor_constexpr(white,        15)
+
+#else
+#error "Macro __chatcolor_constexpr has been incorrectly defined."
+#endif
 };
 
 namespace chatkeybind {	// Enumerate possible keybinds.
@@ -307,7 +315,7 @@ __chatkeybind_constexpr(hotbar9,           kbHotbar9)
 
 #undef __chatkeybind_constexpr
 #else
-#error "Expected __chatkeybind_constexpr to be falsely defined."
+#error "Macro __chatkeybind_constexpr has been incorrectly defined."
 #endif
 };
 

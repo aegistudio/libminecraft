@@ -81,7 +81,10 @@ struct McIoWritableSendfile64Node {
 	/// The constructor of sendfile64() node.
 	McIoWritableSendfile64Node(int sendfd, ssize_t offset, size_t size):
 		sendfd(sendfd), offset(offset), size(size) {}
-		
+	
+	/// Whether the transmission has completed.
+	bool empty() const { return size == 0; }
+	
 	/// Perform sendfile64() on the specified file descriptor.
 	int write(int fd) {
 		int numWritten = ::sendfile64(fd, sendfd, &offset, size);
