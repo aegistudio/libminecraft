@@ -29,7 +29,7 @@ set(LIBMC_SRC src/connection.cpp src/writable.cpp src/stream.cpp
 		src/iobase.cpp src/nbt.cpp src/chat.cpp
 		src/chattoken.gperf src/chatcolor.gperf src/keybind.gperf)
 if(UNIX AND NOT APPLE)
-list(APPEND LIBMC_SRC src/multiplexer_linux.cpp)
+list(APPEND LIBMC_SRC src/multiplexer_linux.cpp src/idlefuture_linux.cpp)
 endif()
 add_library(minecraft ${LIBMC_SRC})
 target_link_libraries(minecraft ${ZLIB_LIBRARIES})
